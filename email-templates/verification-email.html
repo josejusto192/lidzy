@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifique seu email - Lidzy</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+                <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                    <!-- Header com logo e gradiente verde -->
+                    <tr>
+                        <td style="padding: 0; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 16px 16px 0 0;">
+                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td align="center" style="padding: 40px 20px;">
+                                        <!-- Usando logo SVG fornecido pelo usuário -->
+                                        <img src="/images/design-mode/Logoisolado.svg" alt="Lidzy Logo" width="120" height="48" style="display: block; margin: 0 auto 16px auto;" />
+                                        
+                                        <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 500;">
+                                            Gestão Inteligente de Leads
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Conteúdo principal -->
+                    <tr>
+                        <td style="padding: 48px 40px;">
+                            <h2 style="margin: 0 0 16px 0; color: #1f2937; font-size: 24px; font-weight: 600; line-height: 1.3;">
+                                Bem-vindo ao Lidzy! 🎉
+                            </h2>
+                            <p style="margin: 0 0 24px 0; color: #6b7280; font-size: 16px; line-height: 1.6;">
+                                Estamos muito felizes em ter você conosco! Para começar a usar sua conta e aproveitar todos os recursos da plataforma, precisamos verificar seu endereço de email.
+                            </p>
+                            
+                            <!-- Botão de verificação -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 32px 0;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{{ .ConfirmationURL }}" style="display: inline-block; padding: 16px 48px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; text-decoration: none; border-radius: 12px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); transition: transform 0.2s;">
+                                            Verificar Email
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- Link alternativo -->
+                            <div style="margin: 32px 0; padding: 20px; background-color: #f9fafb; border-radius: 8px; border-left: 4px solid #10b981;">
+                                <p style="margin: 0 0 8px 0; color: #374151; font-size: 14px; font-weight: 600;">
+                                    Problemas com o botão?
+                                </p>
+                                <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px; line-height: 1.5;">
+                                    Copie e cole este link no seu navegador:
+                                </p>
+                                <p style="margin: 0; word-break: break-all;">
+                                    <a href="{{ .ConfirmationURL }}" style="color: #10b981; font-size: 13px; text-decoration: none;">
+                                        {{ .ConfirmationURL }}
+                                    </a>
+                                </p>
+                            </div>
+                            
+                            <!-- Informações adicionais -->
+                            <div style="margin: 32px 0 0 0; padding-top: 24px; border-top: 1px solid #e5e7eb;">
+                                <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+                                    <strong style="color: #374151;">O que você pode fazer com o Lidzy:</strong>
+                                </p>
+                                <ul style="margin: 0; padding-left: 20px; color: #6b7280; font-size: 14px; line-height: 1.8;">
+                                    <li>Gerenciar seus leads de forma inteligente</li>
+                                    <li>Automatizar conversas no WhatsApp</li>
+                                    <li>Acompanhar métricas em tempo real</li>
+                                    <li>Integrar com suas ferramentas favoritas</li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 32px 40px; background-color: #f9fafb; border-radius: 0 0 16px 16px;">
+                            <p style="margin: 0 0 8px 0; color: #9ca3af; font-size: 12px; line-height: 1.5; text-align: center;">
+                                Este link de verificação expira em 24 horas.
+                            </p>
+                            <p style="margin: 0 0 16px 0; color: #9ca3af; font-size: 12px; line-height: 1.5; text-align: center;">
+                                Se você não criou uma conta no Lidzy, pode ignorar este email com segurança.
+                            </p>
+                            <div style="text-align: center; margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
+                                <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px; font-weight: 600;">
+                                    Lidzy - Gestão Inteligente de Leads
+                                </p>
+                                <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                                    © 2025 Lidzy. Todos os direitos reservados.
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                
+                <!-- Texto de rodapé fora do card -->
+                <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 24px;">
+                    <tr>
+                        <td align="center" style="padding: 0 20px;">
+                            <p style="margin: 0; color: #9ca3af; font-size: 12px; line-height: 1.5;">
+                                Precisa de ajuda? Entre em contato conosco através do suporte.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
