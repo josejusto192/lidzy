@@ -16,8 +16,30 @@ export async function POST(request: NextRequest) {
     // Determine provider based on webhook structure
     let event, instanceId, from, message, messageId, timestamp, provider
 
+    // Evolution API webhook format
+    if (body.event === 'messages.upsert' || body.event === 'MESSAGES_UPSERT') {
+      event = 'message'
+      instanceId = body.instance
+
+      // Extrair dados da mensagem
+      const msgData = body.data
+      if (msgData && msgData.key && msgData.message) {
+        from = msgData.key.remoteJid
+        messageId = msgData.key.id
+        timestamp = msgData.messageTimestamp
+
+        // Extrair texto da mensagem (pode estar em diferentes formatos)
+        message = msgData.message.conversation ||
+                 msgData.message.extendedTextMessage?.text ||
+                 msgData.message.imageMessage?.caption ||
+                 msgData.message.videoMessage?.caption ||
+                 ''
+
+        provider = 'evolution'
+      }
+    }
     // Baileys webhook format
-    if (body.event) {
+    else if (body.event) {
       event = body.event
       instanceId = body.instanceId
       from = body.from

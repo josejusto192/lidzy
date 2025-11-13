@@ -33,9 +33,9 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
   const [zapiInstanceId, setZapiInstanceId] = useState("")
   const [zapiApiKey, setZapiApiKey] = useState("")
 
-  // Evolution API config
-  const [evolutionApiUrl, setEvolutionApiUrl] = useState("")
-  const [evolutionApiKey, setEvolutionApiKey] = useState("")
+  // Evolution API config (pré-popular com valores do ambiente)
+  const [evolutionApiUrl, setEvolutionApiUrl] = useState("http://31.97.24.93:7458")
+  const [evolutionApiKey, setEvolutionApiKey] = useState("jose1234")
 
   async function handleSubmit() {
     if (!nome) {

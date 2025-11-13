@@ -24,48 +24,23 @@ export async function POST(request: Request) {
     // Configurações da Evolution API (devem vir de variáveis de ambiente)
     const evolutionApiUrl = process.env.EVOLUTION_API_URL || "http://31.97.24.93:7458"
     const evolutionApiKey = process.env.EVOLUTION_API_KEY || "jose1234"
-    const webhookUrl = "https://n8n.josejusto.com.br/webhook/lidzy-evo"
+    const webhookUrl = process.env.EVOLUTION_WEBHOOK_URL || "https://n8n.josejusto.com.br/webhook/lidzy-evo"
 
     console.log("[v0] Criando instância Evolution API:", instanceName)
     console.log("[v0] Evolution API URL:", evolutionApiUrl)
     console.log("[v0] Evolution API Key:", evolutionApiKey.substring(0, 4) + "****")
+    console.log("[v0] Webhook URL:", webhookUrl)
 
     const payload = {
       instanceName: instanceName,
       qrcode: true,
       integration: "WHATSAPP-BAILEYS",
-      // rejectCall: true,
-      // alwaysOnline: true,
-      // readMessages: true,
-      // readStatus: true,
-      // webhook: {
-      //   url: webhookUrl,
-      //   byEvents: true,
-      //   base64: true,
-      //   events: [
-      //     "APPLICATION_STARTUP",
-      //     "QRCODE_UPDATED",
-      //     "MESSAGES_SET",
-      //     "MESSAGES_UPSERT",
-      //     "MESSAGES_UPDATE",
-      //     "MESSAGES_DELETE",
-      //     "SEND_MESSAGE",
-      //     "CONTACTS_SET",
-      //     "CONTACTS_UPSERT",
-      //     "CONTACTS_UPDATE",
-      //     "PRESENCE_UPDATE",
-      //     "CHATS_SET",
-      //     "CHATS_UPSERT",
-      //     "CHATS_UPDATE",
-      //     "CHATS_DELETE",
-      //     "GROUPS_UPSERT",
-      //     "GROUP_UPDATE",
-      //     "GROUP_PARTICIPANTS_UPDATE",
-      //     "CONNECTION_UPDATE",
-      //     "CALL",
-      //     "NEW_JWT_TOKEN",
-      //   ],
-      // },
+      webhook: {
+        url: webhookUrl,
+        by_events: true,
+        base64: true,
+        events: ["MESSAGES_UPSERT"],
+      },
     }
 
     console.log("[v0] Payload para Evolution API:", JSON.stringify(payload, null, 2))
