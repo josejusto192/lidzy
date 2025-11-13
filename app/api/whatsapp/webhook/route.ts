@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       if (event === 'qr') {
         // Update instance with QR code
         await supabase
-          .from('instancias_whatsapp')
+          .from('instancias')
           .update({ session_data: { qr: body.qrCode } })
           .eq('provider_config->instanceId', instanceId)
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       if (event === 'connected') {
         // Update instance status
         await supabase
-          .from('instancias_whatsapp')
+          .from('instancias')
           .update({
             ativo: true,
             session_data: { phone: body.phone, connected: true },
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       if (event === 'logout') {
         // Update instance status
         await supabase
-          .from('instancias_whatsapp')
+          .from('instancias')
           .update({
             ativo: false,
             session_data: { connected: false },
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Get instance from database
     const { data: instance } = await supabase
-      .from('instancias_whatsapp')
+      .from('instancias')
       .select('*, usuarios(id)')
       .eq('provider_config->instanceId', instanceId)
       .single()

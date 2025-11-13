@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { data: instances, error } = await supabase
-      .from('instancias_whatsapp')
+      .from('instancias')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
@@ -116,12 +116,16 @@ export async function POST(request: NextRequest) {
 
     // Insert into database
     const { data: instance, error } = await supabase
-      .from('instancias_whatsapp')
+      .from('instancias')
       .insert({
         user_id: user.id,
         nome,
+        tipo: provider === 'zapi' ? 'Z-API' : 'Baileys', // backward compatibility
         provider,
         provider_config: providerConfig,
+        instance_id: instanceId,
+        token: config.apiKey || '',
+        token_seguranca: config.apiKey || '',
         ativo: true,
       })
       .select()
@@ -151,7 +155,7 @@ export async function POST(request: NextRequest) {
       console.error('Error initializing provider:', error)
 
       // Delete instance from database if initialization failed
-      await supabase.from('instancias_whatsapp').delete().eq('id', instance.id)
+      await supabase.from('instancias').delete().eq('id', instance.id)
 
       return NextResponse.json(
         { error: `Erro ao inicializar provider: ${error}` },

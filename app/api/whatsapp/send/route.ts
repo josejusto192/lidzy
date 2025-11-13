@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     // Get instance from database
     const { data: instance, error: instanceError } = await supabase
-      .from('instancias_whatsapp')
+      .from('instancias')
       .select('*')
       .eq('id', instanceId)
       .eq('user_id', user.id)
