@@ -128,6 +128,8 @@ export async function POST(request: Request) {
         instance_id: instanceName,
         token: evolutionApiKey,
         token_seguranca: evolutionData.hash || "",
+        api_url: evolutionApiUrl,  // Salvar URL da API
+        api_key: evolutionApiKey,  // Salvar chave da API
         ativo: false, // Começa inativo até conectar o WhatsApp
       })
       .select()

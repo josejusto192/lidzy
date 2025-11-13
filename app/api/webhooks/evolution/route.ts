@@ -94,19 +94,22 @@ export async function POST(request: NextRequest) {
       const msgData = body.data
 
       if (!msgData || !msgData.key || !msgData.message) {
-        console.log('Invalid message data')
+        console.log('[Evolution Webhook] Invalid message data')
         return NextResponse.json({ success: true })
       }
 
       // Ignorar mensagens enviadas por nós
       if (msgData.key.fromMe) {
-        console.log('Ignoring message from me')
+        console.log('[Evolution Webhook] Ignoring message from me')
         return NextResponse.json({ success: true })
       }
 
       const from = msgData.key.remoteJid
       const messageId = msgData.key.id
       const timestamp = msgData.messageTimestamp
+
+      // Extrair pushName (nome do contato no WhatsApp)
+      const pushName = msgData.pushName || null
 
       // Extrair texto da mensagem
       const messageText = msgData.message.conversation ||
@@ -116,14 +119,14 @@ export async function POST(request: NextRequest) {
                          ''
 
       if (!messageText) {
-        console.log('No text message found')
+        console.log('[Evolution Webhook] No text message found, ignoring')
         return NextResponse.json({ success: true })
       }
 
       // Limpar número de telefone
       const cleanPhone = from.replace(/@.*$/, '').replace(/[^0-9]/g, '')
 
-      console.log(`Message from ${cleanPhone}: ${messageText}`)
+      console.log(`[Evolution Webhook] Message from ${cleanPhone} (${pushName || 'no name'}): ${messageText.substring(0, 50)}...`)
 
       // Buscar instância
       let { data: instance } = await supabase
@@ -133,14 +136,14 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (!instance) {
-        console.log('Instance not found:', instanceName)
+        console.log('[Evolution Webhook] Instance not found:', instanceName)
         return NextResponse.json({ success: true })
       }
 
       // Buscar ou criar contato
       let { data: contact } = await supabase
         .from('contatos')
-        .select('id')
+        .select('id, nome')
         .eq('telefone', cleanPhone)
         .eq('user_id', instance.user_id)
         .single()
@@ -151,28 +154,38 @@ export async function POST(request: NextRequest) {
           .insert({
             user_id: instance.user_id,
             telefone: cleanPhone,
-            nome: cleanPhone,
+            nome: pushName || cleanPhone,
             origem: 'WhatsApp Evolution API',
           })
-          .select('id')
+          .select('id, nome')
           .single()
 
         contact = newContact
+        console.log('[Evolution Webhook] Created new contact:', contact?.id)
+      } else if (pushName && contact.nome === cleanPhone) {
+        // Atualizar nome do contato se ele ainda estiver com o telefone
+        await supabase
+          .from('contatos')
+          .update({ nome: pushName })
+          .eq('id', contact.id)
+        console.log('[Evolution Webhook] Updated contact name to:', pushName)
       }
 
       if (!contact) {
-        console.log('Failed to create contact')
+        console.log('[Evolution Webhook] Failed to create contact')
         return NextResponse.json({ success: true })
       }
 
       // Buscar ou criar conversa
       let { data: conversation } = await supabase
         .from('conversas')
-        .select('id, unread_count')
+        .select('id, unread_count, chat_name')
         .eq('phone', cleanPhone)
         .eq('instancia_id', instance.id)
         .eq('user_id', instance.user_id)
         .single()
+
+      const chatName = pushName || contact.nome || cleanPhone
 
       if (!conversation) {
         const { data: newConversation } = await supabase
@@ -182,24 +195,32 @@ export async function POST(request: NextRequest) {
             instancia_id: instance.id,
             contato_id: contact.id,
             phone: cleanPhone,
-            chat_name: cleanPhone,
+            chat_name: chatName,
             last_message: messageText,
             last_message_at: new Date().toISOString(),
             unread_count: 1,
           })
-          .select('id, unread_count')
+          .select('id, unread_count, chat_name')
           .single()
 
         conversation = newConversation
+        console.log('[Evolution Webhook] Created new conversation:', conversation?.id)
+      } else if (pushName && conversation.chat_name === cleanPhone) {
+        // Atualizar chat_name se ainda estiver com o telefone
+        await supabase
+          .from('conversas')
+          .update({ chat_name: chatName })
+          .eq('id', conversation.id)
+        console.log('[Evolution Webhook] Updated conversation chat_name to:', chatName)
       }
 
       if (!conversation) {
-        console.log('Failed to create conversation')
+        console.log('[Evolution Webhook] Failed to create conversation')
         return NextResponse.json({ success: true })
       }
 
       // Salvar mensagem
-      await supabase.from('mensagens').insert({
+      const { error: msgError } = await supabase.from('mensagens').insert({
         conversa_id: conversation.id,
         message_id: messageId,
         from_me: false,
@@ -208,8 +229,12 @@ export async function POST(request: NextRequest) {
         timestamp: timestamp ? new Date(Number(timestamp) * 1000).toISOString() : new Date().toISOString(),
       })
 
+      if (msgError) {
+        console.error('[Evolution Webhook] Error saving message:', msgError)
+      }
+
       // Atualizar conversa
-      await supabase
+      const { error: updateError } = await supabase
         .from('conversas')
         .update({
           last_message: messageText,
@@ -219,9 +244,13 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', conversation.id)
 
-      console.log(`Message saved successfully for ${cleanPhone}`)
+      if (updateError) {
+        console.error('[Evolution Webhook] Error updating conversation:', updateError)
+      }
 
-      return NextResponse.json({ success: true, message: 'Message received' })
+      console.log(`[Evolution Webhook] ✅ Message saved successfully for ${cleanPhone}`)
+
+      return NextResponse.json({ success: true, message: 'Message received and saved' })
     }
 
     // Outros eventos que podemos ignorar
