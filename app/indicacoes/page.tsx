@@ -1,6 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { Sidebar } from "@/components/sidebar"
+import { Header } from "@/components/header"
+import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -54,14 +58,39 @@ type ReferralData = {
 }
 
 export default function IndicacoesPage() {
+  const router = useRouter()
+  const [authLoading, setAuthLoading] = useState(true)
+  const [supabase] = useState(() => createClient())
   const [data, setData] = useState<ReferralData | null>(null)
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState("")
   const [inviting, setInviting] = useState(false)
 
   useEffect(() => {
-    fetchReferrals()
-  }, [])
+    const checkAuth = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) {
+          router.push("/login")
+        } else {
+          setAuthLoading(false)
+        }
+      } catch (error) {
+        console.error("[v0] Auth check failed:", error)
+        router.push("/login")
+      }
+    }
+
+    checkAuth()
+  }, [router, supabase])
+
+  useEffect(() => {
+    if (!authLoading) {
+      fetchReferrals()
+    }
+  }, [authLoading])
 
   const fetchReferrals = async () => {
     try {
@@ -160,35 +189,33 @@ export default function IndicacoesPage() {
     }
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-muted rounded w-1/3" />
-          <div className="grid md:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-32 bg-muted rounded" />
-            ))}
-          </div>
-        </div>
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground">Carregando...</div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Gift className="h-8 w-8 text-primary" />
-          Indique e Ganhe
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Convide seus amigos e ganhe <span className="font-bold text-primary">500 créditos</span> para cada amigo que se
-          cadastrar e usar a plataforma. Seu amigo também ganha{" "}
-          <span className="font-bold text-primary">300 créditos</span>!
-        </p>
-      </div>
+    <div className="flex min-h-screen bg-background overflow-hidden">
+      <Sidebar />
+      <div className="flex flex-1 flex-col pt-16 lg:pl-52 lg:pt-0">
+        <Header title="Indique e Ganhe" />
+        <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+          <div className="space-y-6">
+            {/* Header */}
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-2">
+                <Gift className="h-8 w-8 text-primary" />
+                Indique e Ganhe
+              </h1>
+              <p className="text-muted-foreground mt-2">
+                Convide seus amigos e ganhe <span className="font-bold text-primary">500 créditos</span> para cada amigo
+                que se cadastrar e usar a plataforma. Seu amigo também ganha{" "}
+                <span className="font-bold text-primary">300 créditos</span>!
+              </p>
+            </div>
 
       {/* Stats Cards */}
       <div className="grid md:grid-cols-4 gap-4">
@@ -452,6 +479,9 @@ export default function IndicacoesPage() {
           </Card>
         </TabsContent>
       </Tabs>
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

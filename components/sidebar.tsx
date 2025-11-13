@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Layers,
   Shield,
+  Gift,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -92,6 +93,11 @@ const footerMenuItems = [
     title: "Créditos",
     href: "/creditos",
     icon: Coins,
+  },
+  {
+    title: "Indicações",
+    href: "/indicacoes",
+    icon: Gift,
   },
   {
     title: "Configurações",
