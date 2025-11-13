@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     // Webhook do Lidzy para receber eventos do Evolution API
     const webhookUrl = process.env.NEXT_PUBLIC_URL
       ? `${process.env.NEXT_PUBLIC_URL}/api/webhooks/evolution`
-      : "https://lidzy.vercel.app/api/webhooks/evolution"
+      : "https://lidzy.com.br/api/webhooks/evolution"
 
     console.log("[Evolution] Criando instância:", instanceName)
     console.log("[Evolution] API URL:", evolutionApiUrl)

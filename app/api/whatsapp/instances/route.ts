@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         instanceId,
         apiKey: config.apiKey,
         apiUrl: config.apiUrl,
-        webhookUrl: `${process.env.NEXT_PUBLIC_URL || 'https://lidzy.vercel.app'}/api/webhooks/evolution`,
+        webhookUrl: `${process.env.NEXT_PUBLIC_URL || 'https://lidzy.com.br'}/api/webhooks/evolution`,
       }
     }
 
