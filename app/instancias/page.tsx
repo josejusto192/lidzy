@@ -614,9 +614,19 @@ export default function InstanciasPage() {
       <CreateInstanceDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        onSuccess={() => {
+        onSuccess={(data) => {
           loadInstancias()
           setShowCreateDialog(false)
+
+          // Se criou uma instância Evolution API, mostrar QR code automaticamente
+          if (data?.qrcode && data?.instanceName) {
+            setQrCodeDialog({
+              open: true,
+              instanceName: data.instanceName,
+              qrcode: data.qrcode,
+              loading: false,
+            })
+          }
         }}
       />
     </div>

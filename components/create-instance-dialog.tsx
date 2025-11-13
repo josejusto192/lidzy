@@ -21,7 +21,7 @@ import { toast } from "sonner"
 interface CreateInstanceDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess?: () => void
+  onSuccess?: (data?: { qrcode?: string; instanceName?: string }) => void
 }
 
 export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateInstanceDialogProps) {
@@ -91,7 +91,16 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
       onOpenChange(false)
 
       if (onSuccess) {
-        onSuccess()
+        // Passar QR code para Evolution API
+        // Suporta diferentes formatos de resposta: data.qrcode, data.instance.qrCode
+        const qrcodeRaw = data.qrcode || data.instance?.qrCode
+
+        if (provider === "evolution" && qrcodeRaw) {
+          const qrcodeData = qrcodeRaw.base64 || qrcodeRaw.code || qrcodeRaw
+          onSuccess({ qrcode: qrcodeData, instanceName: nome })
+        } else {
+          onSuccess()
+        }
       }
     } catch (error: any) {
       console.error("Error creating instance:", error)
