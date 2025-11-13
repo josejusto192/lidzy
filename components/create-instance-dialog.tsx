@@ -33,9 +33,9 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
   const [zapiInstanceId, setZapiInstanceId] = useState("")
   const [zapiApiKey, setZapiApiKey] = useState("")
 
-  // Evolution API config (pré-popular com valores do ambiente)
-  const [evolutionApiUrl, setEvolutionApiUrl] = useState("http://31.97.24.93:7458")
-  const [evolutionApiKey, setEvolutionApiKey] = useState("jose1234")
+  // Evolution API usa configurações do servidor (fixas)
+  const evolutionApiUrl = "http://31.97.24.93:7458"
+  const evolutionApiKey = "jose1234"
 
   async function handleSubmit() {
     if (!nome) {
@@ -45,11 +45,6 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
 
     if (provider === "zapi" && (!zapiInstanceId || !zapiApiKey)) {
       toast.error("Instance ID e API Key são obrigatórios para Z-API")
-      return
-    }
-
-    if (provider === "evolution" && (!evolutionApiUrl || !evolutionApiKey)) {
-      toast.error("URL e API Key são obrigatórios para Evolution API")
       return
     }
 
@@ -92,8 +87,6 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
       setNome("")
       setZapiInstanceId("")
       setZapiApiKey("")
-      setEvolutionApiUrl("")
-      setEvolutionApiKey("")
 
       onOpenChange(false)
 
@@ -114,7 +107,7 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
         <DialogHeader>
           <DialogTitle>Criar Nova Instância WhatsApp</DialogTitle>
           <DialogDescription>
-            Escolha o provedor e configure sua instância de WhatsApp
+            Conecte uma nova conta WhatsApp ao Lidzy de forma rápida e segura
           </DialogDescription>
         </DialogHeader>
 
@@ -135,7 +128,7 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
             <Label>Provedor</Label>
             <RadioGroup value={provider} onValueChange={(value) => setProvider(value as any)}>
               {/* Evolution API Option */}
-              <Card className={provider === "evolution" ? "border-primary" : ""}>
+              <Card className={provider === "evolution" ? "border-primary border-2" : ""}>
                 <CardHeader className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -143,15 +136,15 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
                       <div className="flex items-center gap-2">
                         <Server className="h-5 w-5 text-primary" />
                         <div>
-                          <CardTitle className="text-base">Evolution API (Recomendado)</CardTitle>
+                          <CardTitle className="text-base">Evolution API</CardTitle>
                           <CardDescription className="text-sm">
-                            API REST completa, já configurada no Coolify
+                            Servidor próprio já configurado - Pronto para usar
                           </CardDescription>
                         </div>
                       </div>
                     </div>
-                    <Badge variant="secondary" className="bg-green-50 text-green-700">
-                      Recomendado
+                    <Badge variant="default" className="bg-green-600">
+                      Pronto
                     </Badge>
                   </div>
                 </CardHeader>
@@ -159,60 +152,58 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
                   <ul className="space-y-1 text-sm text-muted-foreground">
                     <li className="flex items-center gap-2">
                       <Check className="h-3 w-3 text-green-600" />
-                      Gratuito e open-source
+                      Servidor próprio configurado
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-3 w-3 text-green-600" />
-                      API REST completa e documentada
+                      Gratuito e ilimitado
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-3 w-3 text-green-600" />
-                      Multi-instância (várias contas)
+                      Múltiplas contas WhatsApp
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-3 w-3 text-green-600" />
-                      Baseado em Baileys (conexão direta)
+                      Conexão direta e segura
                     </li>
                   </ul>
                 </CardContent>
               </Card>
 
               {/* Z-API Option */}
-              <Card className={provider === "zapi" ? "border-primary" : ""}>
+              <Card className={provider === "zapi" ? "border-primary border-2" : "opacity-75"}>
                 <CardHeader className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <RadioGroupItem value="zapi" id="zapi" />
                       <div className="flex items-center gap-2">
-                        <Zap className="h-5 w-5 text-primary" />
+                        <Zap className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <CardTitle className="text-base">Z-API (Externo)</CardTitle>
+                          <CardTitle className="text-base">Z-API</CardTitle>
                           <CardDescription className="text-sm">
-                            Serviço pago, estável e com suporte oficial
+                            Serviço externo pago - Requer conta própria
                           </CardDescription>
                         </div>
                       </div>
                     </div>
-                    <Badge variant="outline">Pago</Badge>
+                    <Badge variant="outline" className="text-orange-600 border-orange-300">
+                      Opcional
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="px-4 pb-4 pt-0">
                   <ul className="space-y-1 text-sm text-muted-foreground">
                     <li className="flex items-center gap-2">
-                      <Check className="h-3 w-3 text-blue-600" />
-                      Conexão estável e confiável
+                      <Check className="h-3 w-3 text-muted-foreground" />
+                      Serviço externo gerenciado
                     </li>
                     <li className="flex items-center gap-2">
-                      <Check className="h-3 w-3 text-blue-600" />
-                      Suporte oficial 24/7
+                      <Check className="h-3 w-3 text-muted-foreground" />
+                      Requer assinatura paga
                     </li>
                     <li className="flex items-center gap-2">
-                      <Check className="h-3 w-3 text-blue-600" />
-                      Não requer infraestrutura própria
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-3 w-3 text-blue-600" />
-                      Alta disponibilidade
+                      <Check className="h-3 w-3 text-muted-foreground" />
+                      Suporte oficial do provedor
                     </li>
                   </ul>
                 </CardContent>
@@ -259,33 +250,23 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
             </div>
           )}
 
-          {/* Evolution API Config Fields */}
+          {/* Evolution API Config - Servidor configurado automaticamente */}
           {provider === "evolution" && (
-            <div className="space-y-4 rounded-lg border p-4 bg-muted/50">
-              <h4 className="text-sm font-semibold">Configuração Evolution API</h4>
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="evolution-url">URL da API</Label>
-                  <Input
-                    id="evolution-url"
-                    value={evolutionApiUrl}
-                    onChange={(e) => setEvolutionApiUrl(e.target.value)}
-                    placeholder="Ex: https://evolution.seudominio.com"
-                  />
+            <div className="space-y-3 rounded-lg border border-green-200 p-4 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <div className="rounded-full bg-green-600 p-1">
+                    <Check className="h-3 w-3 text-white" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="evolution-key">API Key</Label>
-                  <Input
-                    id="evolution-key"
-                    type="password"
-                    value={evolutionApiKey}
-                    onChange={(e) => setEvolutionApiKey(e.target.value)}
-                    placeholder="Digite a API Key do Evolution"
-                  />
+                <div className="space-y-1.5">
+                  <h4 className="text-sm font-semibold text-green-900 dark:text-green-100">
+                    Tudo Pronto! 🚀
+                  </h4>
+                  <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">
+                    Sua instância será criada automaticamente no servidor Evolution API. Após criar, você receberá um QR Code para escanear com seu WhatsApp. É só isso!
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Você configurou a Evolution API no Coolify. Use a URL e API Key configuradas lá.
-                </p>
               </div>
             </div>
           )}
