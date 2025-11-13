@@ -196,11 +196,12 @@ export async function POST(request: NextRequest) {
       contact = newContact
     }
 
-    // Check if conversation exists
+    // Check if conversation exists for this instance
     let { data: conversation } = await supabase
       .from('conversas')
       .select('id')
-      .eq('contato_id', contact.id)
+      .eq('phone', cleanPhone)
+      .eq('instancia_id', instance.id)
       .eq('user_id', userId)
       .single()
 
@@ -209,9 +210,13 @@ export async function POST(request: NextRequest) {
         .from('conversas')
         .insert({
           user_id: userId,
+          instancia_id: instance.id,
           contato_id: contact.id,
-          status: 'ativa',
-          canal: 'whatsapp',
+          phone: cleanPhone,
+          chat_name: cleanPhone,
+          last_message: message,
+          last_message_at: new Date().toISOString(),
+          unread_count: 1,
         })
         .select('id')
         .single()
@@ -221,25 +226,21 @@ export async function POST(request: NextRequest) {
 
     // Save message
     await supabase.from('mensagens').insert({
-      user_id: userId,
       conversa_id: conversation.id,
-      contato_id: contact.id,
-      mensagem: message,
-      tipo: 'recebida',
-      canal: 'whatsapp',
-      provider_message_id: messageId,
-      metadata: {
-        provider,
-        instanceId,
-        timestamp,
-      },
+      message_id: messageId || `${Date.now()}-${cleanPhone}`,
+      from_me: false,
+      message: message,
+      status: 'received',
+      timestamp: timestamp ? new Date(Number(timestamp) * 1000).toISOString() : new Date().toISOString(),
     })
 
-    // Update conversation last message
+    // Update conversation last message and increment unread
     await supabase
       .from('conversas')
       .update({
-        ultima_mensagem: message,
+        last_message: message,
+        last_message_at: new Date().toISOString(),
+        unread_count: supabase.raw('unread_count + 1'),
         updated_at: new Date().toISOString(),
       })
       .eq('id', conversation.id)

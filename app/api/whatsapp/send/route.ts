@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Clean phone number
+    const cleanPhone = to.replace(/[^0-9]/g, '')
+
     // Get instance from database
     const { data: instance, error: instanceError } = await supabase
       .from('instancias')
@@ -50,12 +53,6 @@ export async function POST(request: NextRequest) {
     const provider = WhatsAppProviderFactory.create(instance.provider as ProviderType)
     await provider.initialize(instance.provider_config)
 
-    // Check if connected
-    const isConnected = await provider.isConnected()
-    if (!isConnected) {
-      return NextResponse.json({ error: 'Instância não está conectada' }, { status: 400 })
-    }
-
     // Send message
     let result
 
@@ -67,20 +64,81 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Tipo de mensagem inválido' }, { status: 400 })
     }
 
-    // Log message in database
+    // Check if contact exists, create if not
+    let { data: contact } = await supabase
+      .from('contatos')
+      .select('id')
+      .eq('telefone', cleanPhone)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!contact) {
+      const { data: newContact } = await supabase
+        .from('contatos')
+        .insert({
+          user_id: user.id,
+          telefone: cleanPhone,
+          nome: cleanPhone,
+          origem: 'WhatsApp Evolution API',
+        })
+        .select('id')
+        .single()
+
+      contact = newContact
+    }
+
+    // Check if conversation exists for this instance
+    let { data: conversation } = await supabase
+      .from('conversas')
+      .select('id')
+      .eq('phone', cleanPhone)
+      .eq('instancia_id', instance.id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!conversation) {
+      const { data: newConversation } = await supabase
+        .from('conversas')
+        .insert({
+          user_id: user.id,
+          instancia_id: instance.id,
+          contato_id: contact.id,
+          phone: cleanPhone,
+          chat_name: cleanPhone,
+          last_message: message,
+          last_message_at: new Date().toISOString(),
+          unread_count: 0,
+        })
+        .select('id')
+        .single()
+
+      conversation = newConversation
+    }
+
+    // Save message in database
     await supabase.from('mensagens').insert({
-      user_id: user.id,
-      instance_id: instanceId,
-      telefone: to,
-      mensagem: message,
-      tipo: type,
+      conversa_id: conversation.id,
+      message_id: result.messageId,
+      from_me: true,
+      message: message,
       status: 'sent',
-      provider_message_id: result.messageId,
+      timestamp: new Date().toISOString(),
     })
+
+    // Update conversation last message
+    await supabase
+      .from('conversas')
+      .update({
+        last_message: message,
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', conversation.id)
 
     return NextResponse.json({
       success: true,
       messageId: result.messageId,
+      conversationId: conversation.id,
     })
   } catch (error) {
     console.error('Error sending message:', error)
