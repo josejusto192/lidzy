@@ -1,6 +1,6 @@
 /**
  * WhatsApp Instances API
- * Unified endpoint for managing WhatsApp instances across different providers (Z-API, Baileys)
+ * Unified endpoint for managing WhatsApp instances across different providers (Z-API, Evolution)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -112,6 +112,13 @@ export async function POST(request: NextRequest) {
         apiUrl: process.env.BAILEYS_SERVICE_URL || 'http://localhost:3001',
         webhookUrl: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/whatsapp/webhook`,
       }
+    } else if (provider === 'evolution') {
+      providerConfig = {
+        instanceId,
+        apiKey: config.apiKey,
+        apiUrl: config.apiUrl,
+        webhookUrl: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/whatsapp/webhook`,
+      }
     }
 
     // Insert into database
@@ -120,7 +127,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         nome,
-        tipo: provider === 'zapi' ? 'Z-API' : 'Baileys', // backward compatibility
+        tipo: provider === 'zapi' ? 'Z-API' : provider === 'evolution' ? 'Evolution API' : 'Baileys', // backward compatibility
         provider,
         provider_config: providerConfig,
         instance_id: instanceId,

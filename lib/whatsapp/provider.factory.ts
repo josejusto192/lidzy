@@ -6,6 +6,7 @@
 import { IWhatsAppProvider, ProviderType } from './provider.interface'
 import { ZApiProvider } from './providers/zapi.provider'
 import { BaileysProvider } from './providers/baileys.provider'
+import { EvolutionProvider } from './providers/evolution.provider'
 
 export class WhatsAppProviderFactory {
   static create(type: ProviderType): IWhatsAppProvider {
@@ -14,19 +15,22 @@ export class WhatsAppProviderFactory {
         return new ZApiProvider()
       case 'baileys':
         return new BaileysProvider()
+      case 'evolution':
+        return new EvolutionProvider()
       default:
         throw new Error(`Unknown provider type: ${type}`)
     }
   }
 
   static getSupportedProviders(): ProviderType[] {
-    return ['zapi', 'baileys']
+    return ['zapi', 'evolution']
   }
 
   static getProviderName(type: ProviderType): string {
     const names: Record<ProviderType, string> = {
       zapi: 'Z-API (Externo)',
       baileys: 'Baileys (Auto-hospedado)',
+      evolution: 'Evolution API (Recomendado)',
     }
     return names[type] || type
   }
@@ -35,6 +39,7 @@ export class WhatsAppProviderFactory {
     const descriptions: Record<ProviderType, string> = {
       zapi: 'Serviço externo pago, estável e com suporte oficial',
       baileys: 'Conexão direta com WhatsApp, gratuito mas requer servidor próprio',
+      evolution: 'API REST poderosa com Baileys integrado, interface simplificada',
     }
     return descriptions[type] || ''
   }
@@ -54,6 +59,14 @@ export class WhatsAppProviderFactory {
         'Sem limitações de API',
         'Privacidade total dos dados',
         'Código open-source',
+      ],
+      evolution: [
+        'Gratuito e open-source',
+        'API REST completa e documentada',
+        'Multi-instância (várias contas)',
+        'Webhook e eventos em tempo real',
+        'Baseado em Baileys (conexão direta)',
+        'Você já tem no Coolify!',
       ],
     }
     return features[type] || []

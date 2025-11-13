@@ -1,150 +1,140 @@
-# 🚀 Setup Rápido - Lidzy com Baileys
+# 🚀 Setup Rápido - Lidzy com Evolution API
 
 Guia para iniciantes! Configure tudo em 3 passos.
 
-## ✅ Passo 1: Configurar Variáveis
-
-Copie o arquivo de exemplo:
-
-```bash
-cp .env.example .env
-```
-
-**IMPORTANTE:** No arquivo `.env`, adicione estas 2 linhas:
-
-```env
-BAILEYS_SERVICE_URL=http://localhost:3001
-NEXT_PUBLIC_URL=http://localhost:3000
-```
-
-**Explicação simples:**
-- `localhost:3001` = Onde o Baileys vai rodar
-- `localhost:3000` = Onde o Lidzy vai rodar
-
-Você **NÃO precisa** mudar nada! Esses valores já estão prontos para funcionar.
-
-## ✅ Passo 2: Instalar Dependências
-
-Execute apenas 2 comandos:
-
-```bash
-# Instalar dependências do Lidzy
-npm install
-
-# Instalar dependências do Baileys
-npm run setup:baileys
-```
-
-Aguarde a instalação (pode demorar 2-3 minutos).
-
-## ✅ Passo 3: Aplicar Migration do Banco
+## ✅ Passo 1: Aplicar Migration do Banco
 
 1. Abra o **Supabase** (https://supabase.com)
 2. Vá no seu projeto
 3. Clique em **SQL Editor** (menu lateral)
-4. Copie TODO o conteúdo do arquivo: `scripts/034-add-baileys-support-v2.sql`
+4. Copie TODO o conteúdo do arquivo: `scripts/035-add-evolution-support.sql`
 5. Cole no editor e clique em **RUN**
 
-Você verá mensagens de sucesso:
+Você verá uma mensagem de sucesso:
 ```
-✓ Coluna "provider" adicionada com sucesso
-✓ Coluna "provider_config" adicionada com sucesso
-✓ Coluna "session_data" adicionada com sucesso
-✓ Coluna "webhook_url" adicionada com sucesso
+✓ Evolution API is now available as a provider option
 ```
 
-## 🎯 Iniciar TUDO de uma vez
+## ✅ Passo 2: Instalar Dependências
 
-Agora é só rodar **1 comando**:
+Execute o comando:
 
 ```bash
-npm run dev:all
+npm install
 ```
 
-Você verá 2 serviços iniciando automaticamente:
+Aguarde a instalação (pode demorar 2-3 minutos).
+
+## ✅ Passo 3: Iniciar o Lidzy
+
+```bash
+npm run dev
+```
+
+Você verá:
 
 ```
-[Lidzy]   ▲ Next.js ready on http://localhost:3000
-[Baileys] 🚀 Baileys service running on port 3001
+▲ Next.js ready on http://localhost:3000
 ```
 
 **Pronto! Tudo funcionando!** 🎉
 
-## 📱 Criar sua primeira instância Baileys
+## 📱 Criar sua primeira instância Evolution API
+
+### Pré-requisito: Evolution API no Coolify
+
+Você já deve ter Evolution API rodando no Coolify. Se não tiver, consulte: `EVOLUTION_API_SETUP.md`
+
+Você precisará:
+- **URL da Evolution API** (ex: `https://evolution.seudominio.com`)
+- **API Key** (configurada no Coolify)
+
+### Criar Instância
 
 1. Abra: **http://localhost:3000/instancias**
-2. Clique em **"Nova Instância"**
-3. Escolha **"Baileys (Auto-hospedado)"** ✅
-4. Digite um nome (ex: "WhatsApp Principal")
+2. Clique em **"+ Nova Instância"**
+3. Escolha **"Evolution API (Recomendado)"** ✅
+4. Preencha:
+   - **Nome**: Ex: "WhatsApp Principal"
+   - **URL da API**: Sua URL do Coolify
+   - **API Key**: Sua chave do Evolution
 5. Clique em **"Criar Instância"**
-6. **Escaneie o QR Code** com seu WhatsApp
+6. **Escaneie o QR Code** que aparecer
+7. Aguarde status **"Conectado"**
 
 ✅ **Conectado! Agora você pode enviar mensagens!**
 
 ## 🆘 Problemas?
 
-### Erro: "Port 3001 already in use"
+### Erro: "Failed to connect Evolution instance"
 
+**Causa**: Evolution API não está acessível
+
+**Solução**:
 ```bash
-# Descubra qual processo está usando a porta:
-lsof -i :3001
+# Verificar se Evolution está online
+curl https://evolution.seudominio.com/health
 
-# Mate o processo:
-kill -9 <PID>
-
-# Tente novamente:
-npm run dev:all
+# Deve retornar: {"status": "ok"}
 ```
 
-### Erro: "BAILEYS_SERVICE_URL is not defined"
+### Erro: "Unauthorized" ou "Invalid API Key"
 
-Você esqueceu de adicionar as variáveis no `.env`. Volte ao **Passo 1**.
+**Causa**: API Key incorreta
+
+**Solução**:
+- Verifique a API Key no Coolify (variável `AUTHENTICATION_API_KEY`)
+- Certifique-se de estar usando a mesma chave no Lidzy
 
 ### Erro ao aplicar migration
 
-Certifique-se de copiar **TODO** o conteúdo do arquivo `scripts/034-add-baileys-support-v2.sql`, não apenas parte dele.
+Certifique-se de copiar **TODO** o conteúdo do arquivo `scripts/035-add-evolution-support.sql`, não apenas parte dele.
 
 ## 💡 Comandos Úteis
 
 ```bash
-# Iniciar tudo junto (Lidzy + Baileys)
-npm run dev:all
-
-# Iniciar apenas Lidzy
+# Desenvolvimento local
 npm run dev
 
-# Iniciar apenas Baileys
-npm run dev:baileys
+# Build para produção
+npm run build
 
-# Instalar dependências do Baileys
-npm run setup:baileys
+# Iniciar em produção
+npm start
 ```
 
-## 🎓 Próximos Passos
+## 🎓 Documentação
 
-Depois de tudo funcionando:
+- **Setup completo Evolution API**: `EVOLUTION_API_SETUP.md`
+- **Como funciona Evolution API**: https://doc.evolution-api.com/
 
-1. **Teste enviar uma mensagem** pela UI do Lidzy
-2. **Configure seus workflows** de automação
-3. **Leia a documentação completa:**
-   - `WHATSAPP_PROVIDERS.md` - Comparação Z-API vs Baileys
-   - `QUICK_START_BAILEYS.md` - Deploy em produção
-   - `baileys-service/README.md` - API do Baileys
+## 🚀 Deploy em Produção
 
-## 🚀 Deploy em Produção (Futuro)
+### Lidzy (Vercel)
 
-Quando você quiser colocar em produção:
+1. Conecte seu repositório GitHub no Vercel
+2. Deploy automático em cada push
+3. **Custo**: Grátis (plano Hobby)
 
-1. **Lidzy** → Deploy no Vercel (como sempre)
-2. **Baileys** → Deploy em VPS (Digital Ocean, AWS, etc)
-3. **Atualizar `.env` de produção** com as URLs reais
+### Evolution API (Coolify/VPS)
+
+Você já tem rodando! Se precisar fazer deploy novamente, consulte: `EVOLUTION_API_SETUP.md`
 
 **Custo estimado:**
 - Lidzy no Vercel: **Grátis** (plano hobby)
-- Baileys em VPS básico: **~R$ 20-30/mês**
+- Evolution API em VPS: **~R$ 23/mês** (Hetzner CX21)
 
-**Total: ~R$ 25/mês** (vs R$ 49/mês+ com Z-API)
+**Total: ~R$ 23/mês** (vs R$ 49/mês+ com Z-API)
+
+## 🎯 Próximos Passos
+
+Depois de tudo funcionando:
+
+1. ✅ **Teste enviar uma mensagem** pela UI do Lidzy
+2. ✅ **Configure webhooks** para receber mensagens
+3. ✅ **Crie múltiplas instâncias** (Evolution suporta multi-instância)
+4. ✅ **Configure automações** de atendimento
 
 ---
 
-Dúvidas? Abra uma issue no GitHub ou consulte a documentação completa! 📚
+Dúvidas? Consulte `EVOLUTION_API_SETUP.md` para documentação completa! 📚

@@ -26,12 +26,16 @@ interface CreateInstanceDialogProps {
 
 export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateInstanceDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [provider, setProvider] = useState<"zapi" | "baileys">("baileys")
+  const [provider, setProvider] = useState<"zapi" | "evolution">("evolution")
   const [nome, setNome] = useState("")
 
   // Z-API config
   const [zapiInstanceId, setZapiInstanceId] = useState("")
   const [zapiApiKey, setZapiApiKey] = useState("")
+
+  // Evolution API config
+  const [evolutionApiUrl, setEvolutionApiUrl] = useState("")
+  const [evolutionApiKey, setEvolutionApiKey] = useState("")
 
   async function handleSubmit() {
     if (!nome) {
@@ -44,13 +48,27 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
       return
     }
 
+    if (provider === "evolution" && (!evolutionApiUrl || !evolutionApiKey)) {
+      toast.error("URL e API Key são obrigatórios para Evolution API")
+      return
+    }
+
     setLoading(true)
 
     try {
-      const config = provider === "zapi" ? {
-        instanceId: zapiInstanceId,
-        apiKey: zapiApiKey,
-      } : {}
+      let config = {}
+
+      if (provider === "zapi") {
+        config = {
+          instanceId: zapiInstanceId,
+          apiKey: zapiApiKey,
+        }
+      } else if (provider === "evolution") {
+        config = {
+          apiUrl: evolutionApiUrl,
+          apiKey: evolutionApiKey,
+        }
+      }
 
       const response = await fetch("/api/whatsapp/instances", {
         method: "POST",
@@ -74,6 +92,8 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
       setNome("")
       setZapiInstanceId("")
       setZapiApiKey("")
+      setEvolutionApiUrl("")
+      setEvolutionApiKey("")
 
       onOpenChange(false)
 
@@ -114,18 +134,18 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
           <div className="space-y-3">
             <Label>Provedor</Label>
             <RadioGroup value={provider} onValueChange={(value) => setProvider(value as any)}>
-              {/* Baileys Option */}
-              <Card className={provider === "baileys" ? "border-primary" : ""}>
+              {/* Evolution API Option */}
+              <Card className={provider === "evolution" ? "border-primary" : ""}>
                 <CardHeader className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <RadioGroupItem value="baileys" id="baileys" />
+                      <RadioGroupItem value="evolution" id="evolution" />
                       <div className="flex items-center gap-2">
                         <Server className="h-5 w-5 text-primary" />
                         <div>
-                          <CardTitle className="text-base">Baileys (Auto-hospedado)</CardTitle>
+                          <CardTitle className="text-base">Evolution API (Recomendado)</CardTitle>
                           <CardDescription className="text-sm">
-                            Conexão direta, gratuito mas requer servidor
+                            API REST completa, já configurada no Coolify
                           </CardDescription>
                         </div>
                       </div>
@@ -139,19 +159,19 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
                   <ul className="space-y-1 text-sm text-muted-foreground">
                     <li className="flex items-center gap-2">
                       <Check className="h-3 w-3 text-green-600" />
-                      Gratuito (sem custos mensais)
+                      Gratuito e open-source
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-3 w-3 text-green-600" />
-                      Controle total da infraestrutura
+                      API REST completa e documentada
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-3 w-3 text-green-600" />
-                      Sem limitações de API
+                      Multi-instância (várias contas)
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-3 w-3 text-green-600" />
-                      Privacidade total dos dados
+                      Baseado em Baileys (conexão direta)
                     </li>
                   </ul>
                 </CardContent>
@@ -239,14 +259,34 @@ export function CreateInstanceDialog({ open, onOpenChange, onSuccess }: CreateIn
             </div>
           )}
 
-          {/* Baileys Info */}
-          {provider === "baileys" && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm dark:border-blue-900 dark:bg-blue-950">
-              <p className="text-blue-900 dark:text-blue-100">
-                ℹ️ <strong>Baileys requer servidor próprio.</strong> Certifique-se de que o serviço Baileys está
-                rodando em <code className="bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded">localhost:3001</code>{" "}
-                ou configure a URL no arquivo .env
-              </p>
+          {/* Evolution API Config Fields */}
+          {provider === "evolution" && (
+            <div className="space-y-4 rounded-lg border p-4 bg-muted/50">
+              <h4 className="text-sm font-semibold">Configuração Evolution API</h4>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="evolution-url">URL da API</Label>
+                  <Input
+                    id="evolution-url"
+                    value={evolutionApiUrl}
+                    onChange={(e) => setEvolutionApiUrl(e.target.value)}
+                    placeholder="Ex: https://evolution.seudominio.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="evolution-key">API Key</Label>
+                  <Input
+                    id="evolution-key"
+                    type="password"
+                    value={evolutionApiKey}
+                    onChange={(e) => setEvolutionApiKey(e.target.value)}
+                    placeholder="Digite a API Key do Evolution"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Você configurou a Evolution API no Coolify. Use a URL e API Key configuradas lá.
+                </p>
+              </div>
             </div>
           )}
         </div>

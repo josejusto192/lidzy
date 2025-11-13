@@ -5,13 +5,8 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:baileys\" --names \"Lidzy,Baileys\" --prefix-colors \"cyan,green\"",
-    "dev:baileys": "cd baileys-service && npm run dev",
     "lint": "next lint",
-    "start": "next start",
-    "start:all": "concurrently \"npm start\" \"npm run start:baileys\" --names \"Lidzy,Baileys\" --prefix-colors \"cyan,green\"",
-    "start:baileys": "cd baileys-service && npm start",
-    "setup:baileys": "cd baileys-service && npm install"
+    "start": "next start"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -77,7 +72,6 @@
     "@types/papaparse": "^5.5.0",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "concurrently": "^8.2.2",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",

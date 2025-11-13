@@ -25,6 +25,7 @@ export interface WhatsAppContact {
 
 export interface WhatsAppInstanceStatus {
   connected: boolean
+  status: string
   qrCode?: string
   phone?: string
   battery?: number
@@ -91,7 +92,7 @@ export interface IWhatsAppProvider {
   validatePhone(phone: string): Promise<boolean>
 }
 
-export type ProviderType = 'zapi' | 'baileys'
+export type ProviderType = 'zapi' | 'baileys' | 'evolution'
 
 export interface ProviderFactory {
   create(type: ProviderType): IWhatsAppProvider
