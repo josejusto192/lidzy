@@ -17,38 +17,69 @@ export class EvolutionProvider implements IWhatsAppProvider {
     }
   }
 
+  private getHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'apikey': this.apiKey,
+    }
+  }
+
   async connect(): Promise<void> {
     try {
+      // Preparar payload para criar instância
+      const webhookUrl = this.config?.webhookUrl || `${process.env.NEXT_PUBLIC_URL || ''}/api/whatsapp/webhook`
+
+      const createPayload: any = {
+        instanceName: this.instanceName,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      }
+
+      // Adicionar webhook se URL estiver disponível
+      if (webhookUrl) {
+        createPayload.webhook = {
+          url: webhookUrl,
+          by_events: true,
+          base64: true,
+          events: ['MESSAGES_UPSERT', 'SEND_MESSAGE', 'CONNECTION_UPDATE'],
+        }
+      }
+
       // Criar instância na Evolution API
       const createResponse = await fetch(`${this.apiUrl}/instance/create`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.apiKey,
-        },
-        body: JSON.stringify({
-          instanceName: this.instanceName,
-          qrcode: true,
-          integration: 'WHATSAPP-BAILEYS',
-        }),
+        headers: this.getHeaders(),
+        body: JSON.stringify(createPayload),
       })
 
       if (!createResponse.ok) {
-        const error = await createResponse.json()
-        throw new Error(`Failed to create Evolution instance: ${error.message || createResponse.statusText}`)
+        const errorText = await createResponse.text()
+        let errorMessage = errorText
+        try {
+          const errorJson = JSON.parse(errorText)
+          errorMessage = errorJson.message || errorJson.error || errorText
+        } catch (e) {
+          // Não é JSON, usar texto direto
+        }
+        throw new Error(`Failed to create Evolution instance: ${errorMessage} (Status: ${createResponse.status})`)
       }
 
-      // Conectar instância
+      const createData = await createResponse.json()
+      console.log('Evolution instance created:', createData)
+
+      // Conectar instância (obter QR code)
       const connectResponse = await fetch(`${this.apiUrl}/instance/connect/${this.instanceName}`, {
         method: 'GET',
-        headers: {
-          'apikey': this.apiKey,
-        },
+        headers: this.getHeaders(),
       })
 
       if (!connectResponse.ok) {
-        throw new Error('Failed to connect Evolution instance')
+        const errorText = await connectResponse.text()
+        throw new Error(`Failed to connect Evolution instance: ${errorText} (Status: ${connectResponse.status})`)
       }
+
+      const connectData = await connectResponse.json()
+      console.log('Evolution instance connected:', connectData)
     } catch (error) {
       throw new Error(`Evolution API connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
@@ -58,9 +89,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     try {
       const response = await fetch(`${this.apiUrl}/instance/logout/${this.instanceName}`, {
         method: 'DELETE',
-        headers: {
-          'apikey': this.apiKey,
-        },
+        headers: this.getHeaders(),
       })
 
       if (!response.ok) {
@@ -75,9 +104,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     try {
       const response = await fetch(`${this.apiUrl}/instance/connectionState/${this.instanceName}`, {
         method: 'GET',
-        headers: {
-          'apikey': this.apiKey,
-        },
+        headers: this.getHeaders(),
       })
 
       if (!response.ok) {
@@ -106,14 +133,10 @@ export class EvolutionProvider implements IWhatsAppProvider {
     try {
       // Formatar número no padrão internacional
       const formattedNumber = to.replace(/\D/g, '')
-      const remoteJid = `${formattedNumber}@s.whatsapp.net`
 
       const response = await fetch(`${this.apiUrl}/message/sendText/${this.instanceName}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.apiKey,
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           number: formattedNumber,
           text: message,
@@ -141,10 +164,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
 
       const response = await fetch(`${this.apiUrl}/message/sendMedia/${this.instanceName}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.apiKey,
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           number: formattedNumber,
           mediatype: 'image',
@@ -172,9 +192,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     try {
       const response = await fetch(`${this.apiUrl}/instance/connect/${this.instanceName}`, {
         method: 'GET',
-        headers: {
-          'apikey': this.apiKey,
-        },
+        headers: this.getHeaders(),
       })
 
       if (!response.ok) {
@@ -202,10 +220,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
 
       const response = await fetch(`${this.apiUrl}/chat/findContact/${this.instanceName}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.apiKey,
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           number: formattedNumber,
         }),
@@ -233,10 +248,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
 
       const response = await fetch(`${this.apiUrl}/chat/whatsappNumbers/${this.instanceName}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.apiKey,
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           numbers: [formattedNumber],
         }),
