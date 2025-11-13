@@ -42,8 +42,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
       if (webhookUrl) {
         createPayload.webhook = {
           url: webhookUrl,
-          webhook_by_events: true,
-          webhook_base64: true,
+          webhookByEvents: false,  // Usar endpoint único
+          webhookBase64: false,    // Não enviar base64 (economizar banda)
           events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
         }
       }

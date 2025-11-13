@@ -12,9 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { AlertDialogCustom } from "@/components/alert-dialog-custom"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, Smartphone, AlertCircle, QrCode, RefreshCw } from "lucide-react"
+import { Plus, Pencil, Trash2, Smartphone, AlertCircle, QrCode, RefreshCw, CheckCircle2 } from "lucide-react"
 import Image from "next/image"
 import { CreateInstanceDialog } from "@/components/create-instance-dialog"
+import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface Instancia {
   id: string
@@ -82,6 +84,48 @@ export default function InstanciasPage() {
 
   useEffect(() => {
     loadInstancias()
+
+    // Configurar Supabase Realtime para atualizar status automaticamente
+    const supabase = createClient()
+
+    const channel = supabase
+      .channel('instancias-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'instancias'
+        },
+        (payload) => {
+          console.log('[Realtime] Instance updated:', payload)
+
+          // Atualizar a instância na lista
+          setInstancias((prev) =>
+            prev.map((inst) =>
+              inst.id === payload.new.id
+                ? { ...inst, ...payload.new }
+                : inst
+            )
+          )
+
+          // Mostrar toast quando conectar
+          if (payload.new.ativo && !payload.old.ativo) {
+            toast.success(`✅ ${payload.new.nome} conectado com sucesso!`)
+
+            // Fechar o dialog de QR code se estiver aberto
+            setQrCodeDialog((prev) => ({
+              ...prev,
+              open: false
+            }))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const loadInstancias = async () => {

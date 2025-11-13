@@ -27,20 +27,45 @@ export async function POST(request: NextRequest) {
     // ==================== CONNECTION UPDATE ====================
     if (event === 'connection.update' || event === 'CONNECTION_UPDATE') {
       const state = body.data?.state || body.state
+      const statusReason = body.data?.statusReason || body.statusReason
 
-      console.log(`Connection update for ${instanceName}: ${state}`)
+      console.log(`[Evolution Webhook] Connection update for ${instanceName}:`, {
+        state,
+        statusReason,
+        fullPayload: body
+      })
 
-      await supabase
+      // Atualizar status no banco
+      const updateData: any = {
+        ativo: state === 'open',
+        updated_at: new Date().toISOString()
+      }
+
+      // Manter session_data existente e adicionar novos campos
+      const { data: currentInstance } = await supabase
         .from('instancias')
-        .update({
-          ativo: state === 'open',
-          session_data: {
-            connected: state === 'open',
-            state: state,
-            updated_at: new Date().toISOString()
-          }
-        })
+        .select('session_data')
         .eq('instance_id', instanceName)
+        .single()
+
+      updateData.session_data = {
+        ...(currentInstance?.session_data || {}),
+        connected: state === 'open',
+        state: state,
+        statusReason: statusReason,
+        lastConnectionUpdate: new Date().toISOString()
+      }
+
+      const { error } = await supabase
+        .from('instancias')
+        .update(updateData)
+        .eq('instance_id', instanceName)
+
+      if (error) {
+        console.error('[Evolution Webhook] Error updating instance:', error)
+      } else {
+        console.log(`[Evolution Webhook] Instance ${instanceName} updated: ativo=${state === 'open'}`)
+      }
 
       return NextResponse.json({ success: true, message: 'Connection updated' })
     }
