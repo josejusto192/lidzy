@@ -4,6 +4,8 @@ import { Sora } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/toaster"
+import { GlobalSearch } from "@/components/global-search"
 import "./globals.css"
 
 const sora = Sora({
@@ -31,6 +33,8 @@ export default function RootLayout({
       <body className={`font-sans ${sora.variable} antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <Suspense fallback={null}>{children}</Suspense>
+          <GlobalSearch />
+          <Toaster />
           <Analytics />
         </ThemeProvider>
       </body>
