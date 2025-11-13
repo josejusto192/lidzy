@@ -49,64 +49,131 @@ export async function POST(request: Request) {
         }
       }
 
-      // Buscar assinatura pelo subscription_id
-      const { data: assinatura, error: assinaturaError } = await supabase
-        .from("assinaturas")
-        .select("*, planos(*)")
-        .eq("asaas_subscription_id", payment.subscription)
-        .single()
+      // Check if it's a subscription or credit purchase
+      let isSubscription = !!payment.subscription
+      let isCreditPurchase = false
 
-      if (assinaturaError || !assinatura) {
-        console.error("[v0] Assinatura não encontrada:", payment.subscription)
-        return NextResponse.json({ error: "Assinatura não encontrada" }, { status: 404 })
+      if (isSubscription) {
+        // Buscar assinatura pelo subscription_id
+        const { data: assinatura, error: assinaturaError } = await supabase
+          .from("assinaturas")
+          .select("*, planos(*)")
+          .eq("asaas_subscription_id", payment.subscription)
+          .single()
+
+        if (assinaturaError || !assinatura) {
+          console.error("[v0] Assinatura não encontrada, verificando compra de créditos")
+          isSubscription = false
+        } else {
+          // Atualizar status da assinatura
+          await supabase
+            .from("assinaturas")
+            .update({
+              status: "active",
+              data_inicio: new Date().toISOString(),
+            })
+            .eq("id", assinatura.id)
+
+          // Adicionar créditos ao usuário
+          const { data: usuario } = await supabase
+            .from("usuarios")
+            .select("creditos, nome, email")
+            .eq("id", assinatura.user_id)
+            .single()
+
+          const creditosAtuais = usuario?.creditos || 0
+          const novosCreditos = creditosAtuais + assinatura.planos.creditos_mensais
+
+          await supabase.from("usuarios").update({ creditos: novosCreditos }).eq("id", assinatura.user_id)
+
+          // Registrar no histórico
+          await supabase.from("historico_creditos").insert({
+            user_id: assinatura.user_id,
+            tipo: "recarga",
+            quantidade: assinatura.planos.creditos_mensais,
+            saldo_anterior: creditosAtuais,
+            saldo_novo: novosCreditos,
+            descricao: `Créditos da assinatura ${assinatura.planos.nome}`,
+            metadata: { payment_id: payment.id, subscription_id: payment.subscription },
+          })
+
+          console.log("[v0] Créditos adicionados:", assinatura.planos.creditos_mensais)
+
+          // Enviar email de confirmação
+          if (usuario?.email) {
+            await sendEmail({
+              to: usuario.email,
+              subject: "Pagamento Confirmado - Créditos Adicionados! 🎉",
+              html: getPaymentConfirmedEmailHtml(
+                usuario.nome || "Cliente",
+                assinatura.planos.nome,
+                assinatura.planos.creditos_mensais,
+                new Date(payment.paymentDate || payment.confirmedDate).toLocaleDateString("pt-BR")
+              ),
+            })
+          }
+        }
       }
 
-      // Atualizar status da assinatura
-      await supabase
-        .from("assinaturas")
-        .update({
-          status: "active",
-          data_inicio: new Date().toISOString(),
-        })
-        .eq("id", assinatura.id)
+      // If not subscription, check for credit purchase
+      if (!isSubscription) {
+        const { data: purchase, error: purchaseError } = await supabase
+          .from("credit_purchases")
+          .select("*")
+          .eq("asaas_payment_id", paymentId)
+          .single()
 
-      // Adicionar créditos ao usuário
-      const { data: usuario } = await supabase
-        .from("usuarios")
-        .select("creditos, nome, email")
-        .eq("id", assinatura.user_id)
-        .single()
+        if (!purchaseError && purchase) {
+          isCreditPurchase = true
 
-      const creditosAtuais = usuario?.creditos || 0
-      const novosCreditos = creditosAtuais + assinatura.planos.creditos_mensais
+          // Update purchase status
+          await supabase.from("credit_purchases").update({ status: "completed", updated_at: new Date().toISOString() }).eq("id", purchase.id)
 
-      await supabase.from("usuarios").update({ creditos: novosCreditos }).eq("id", assinatura.user_id)
+          // Add credits to user
+          const { data: usuario } = await supabase
+            .from("usuarios")
+            .select("creditos, nome, email")
+            .eq("id", purchase.user_id)
+            .single()
 
-      // Registrar no histórico
-      await supabase.from("historico_creditos").insert({
-        user_id: assinatura.user_id,
-        tipo: "recarga",
-        quantidade: assinatura.planos.creditos_mensais,
-        saldo_anterior: creditosAtuais,
-        saldo_novo: novosCreditos,
-        descricao: `Créditos da assinatura ${assinatura.planos.nome}`,
-        metadata: { payment_id: payment.id, subscription_id: payment.subscription },
-      })
+          const creditosAtuais = usuario?.creditos || 0
+          const novosCreditos = creditosAtuais + purchase.creditos
 
-      console.log("[v0] Créditos adicionados:", assinatura.planos.creditos_mensais)
+          await supabase.from("usuarios").update({ creditos: novosCreditos }).eq("id", purchase.user_id)
 
-      // Enviar email de confirmação
-      if (usuario?.email) {
-        await sendEmail({
-          to: usuario.email,
-          subject: "Pagamento Confirmado - Créditos Adicionados! 🎉",
-          html: getPaymentConfirmedEmailHtml(
-            usuario.nome || "Cliente",
-            assinatura.planos.nome,
-            assinatura.planos.creditos_mensais,
-            new Date(payment.paymentDate || payment.confirmedDate).toLocaleDateString("pt-BR")
-          ),
-        })
+          // Register in history
+          await supabase.from("historico_creditos").insert({
+            user_id: purchase.user_id,
+            tipo: "compra",
+            quantidade: purchase.creditos,
+            saldo_anterior: creditosAtuais,
+            saldo_novo: novosCreditos,
+            descricao: `Compra de pacote de créditos`,
+            metadata: { payment_id: paymentId, purchase_id: purchase.id },
+          })
+
+          console.log("[v0] Créditos de compra adicionados:", purchase.creditos)
+
+          // Send email
+          if (usuario?.email) {
+            await sendEmail({
+              to: usuario.email,
+              subject: "Pagamento Confirmado - Créditos Adicionados! 🎉",
+              html: getPaymentConfirmedEmailHtml(
+                usuario.nome || "Cliente",
+                `Pacote de ${purchase.creditos} créditos`,
+                purchase.creditos,
+                new Date(payment.paymentDate || payment.confirmedDate).toLocaleDateString("pt-BR")
+              ),
+            })
+          }
+        }
+      }
+
+      // If neither subscription nor credit purchase found
+      if (!isSubscription && !isCreditPurchase) {
+        console.error("[v0] Pagamento não vinculado a assinatura ou compra de créditos:", paymentId)
+        return NextResponse.json({ error: "Pagamento não identificado" }, { status: 404 })
       }
     }
 

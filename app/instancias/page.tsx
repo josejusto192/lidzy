@@ -14,6 +14,7 @@ import { AlertDialogCustom } from "@/components/alert-dialog-custom"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Plus, Pencil, Trash2, Smartphone, AlertCircle, QrCode, RefreshCw } from "lucide-react"
 import Image from "next/image"
+import { CreateInstanceDialog } from "@/components/create-instance-dialog"
 
 interface Instancia {
   id: string
@@ -31,6 +32,7 @@ export default function InstanciasPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     nome: "",
@@ -333,17 +335,7 @@ export default function InstanciasPage() {
                     </p>
                   </div>
                   <Button
-                    onClick={() => {
-                      setShowForm(!showForm)
-                      setEditingId(null)
-                      setFormData({
-                        nome: "",
-                        tipo: "Z-API",
-                        instance_id: "",
-                        token: "",
-                        token_seguranca: "",
-                      })
-                    }}
+                    onClick={() => setShowCreateDialog(true)}
                     className="gap-2"
                     size="sm"
                   >
@@ -456,7 +448,7 @@ export default function InstanciasPage() {
                     <Smartphone className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-semibold mb-2">Nenhuma instância configurada</h3>
                     <p className="text-muted-foreground mb-4">Conecte sua primeira instância para começar</p>
-                    <Button onClick={() => setShowForm(true)} className="gap-2">
+                    <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
                       <Plus className="h-4 w-4" />
                       Adicionar Instância
                     </Button>
@@ -617,6 +609,15 @@ export default function InstanciasPage() {
         message={dialogState.message}
         type={dialogState.type}
         details={dialogState.details}
+      />
+
+      <CreateInstanceDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSuccess={() => {
+          loadInstancias()
+          setShowCreateDialog(false)
+        }}
       />
     </div>
   )

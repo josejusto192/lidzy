@@ -26,6 +26,7 @@ import {
   Sparkles,
   Camera,
   Trash2,
+  Gift,
 } from "lucide-react"
 
 interface Usuario {
@@ -518,6 +519,34 @@ export default function ConfiguracoesPage() {
                         </Button>
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-background">
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
+                        <Gift className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <CardTitle>Indique e Ganhe</CardTitle>
+                        <CardDescription>500 créditos por indicação</CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg bg-background/50 p-4">
+                      <p className="text-sm text-muted-foreground">
+                        Convide amigos e ganhe <span className="font-semibold text-primary">500 créditos</span> para cada
+                        cadastro completado. Seus amigos também ganham <span className="font-semibold text-green-600">300
+                        créditos</span> de boas-vindas!
+                      </p>
+                    </div>
+
+                    <Button onClick={() => router.push("/indicacoes")} className="w-full" size="lg" variant="default">
+                      <Gift className="mr-2 h-4 w-4" />
+                      Começar a Indicar
+                    </Button>
                   </CardContent>
                 </Card>
               </div>
