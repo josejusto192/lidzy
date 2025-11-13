@@ -27,8 +27,10 @@ export class EvolutionProvider implements IWhatsAppProvider {
   async connect(): Promise<void> {
     try {
       // Preparar payload para criar instância
-      // Usa webhook do n8n se configurado, senão usa o webhook interno
-      const webhookUrl = this.config?.webhookUrl || process.env.EVOLUTION_WEBHOOK_URL || `${process.env.NEXT_PUBLIC_URL || ''}/api/whatsapp/webhook`
+      // Webhook do Lidzy para receber eventos
+      const webhookUrl = this.config?.webhookUrl ||
+        (process.env.NEXT_PUBLIC_URL ? `${process.env.NEXT_PUBLIC_URL}/api/webhooks/evolution` :
+         'https://lidzy.vercel.app/api/webhooks/evolution')
 
       const createPayload: any = {
         instanceName: this.instanceName,
@@ -40,8 +42,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
       if (webhookUrl) {
         createPayload.webhook = {
           url: webhookUrl,
-          by_events: true,
-          base64: true,
+          webhook_by_events: true,
+          webhook_base64: true,
           events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
         }
       }

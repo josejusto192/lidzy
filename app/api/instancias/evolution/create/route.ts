@@ -24,12 +24,16 @@ export async function POST(request: Request) {
     // Configurações da Evolution API (devem vir de variáveis de ambiente)
     const evolutionApiUrl = process.env.EVOLUTION_API_URL || "http://31.97.24.93:7458"
     const evolutionApiKey = process.env.EVOLUTION_API_KEY || "jose1234"
-    const webhookUrl = process.env.EVOLUTION_WEBHOOK_URL || "https://n8n.josejusto.com.br/webhook/lidzy-evo"
 
-    console.log("[v0] Criando instância Evolution API:", instanceName)
-    console.log("[v0] Evolution API URL:", evolutionApiUrl)
-    console.log("[v0] Evolution API Key:", evolutionApiKey.substring(0, 4) + "****")
-    console.log("[v0] Webhook URL:", webhookUrl)
+    // Webhook do Lidzy para receber eventos do Evolution API
+    const webhookUrl = process.env.NEXT_PUBLIC_URL
+      ? `${process.env.NEXT_PUBLIC_URL}/api/webhooks/evolution`
+      : "https://lidzy.vercel.app/api/webhooks/evolution"
+
+    console.log("[Evolution] Criando instância:", instanceName)
+    console.log("[Evolution] API URL:", evolutionApiUrl)
+    console.log("[Evolution] API Key:", evolutionApiKey.substring(0, 4) + "****")
+    console.log("[Evolution] Webhook URL:", webhookUrl)
 
     const payload = {
       instanceName: instanceName,
@@ -37,9 +41,13 @@ export async function POST(request: Request) {
       integration: "WHATSAPP-BAILEYS",
       webhook: {
         url: webhookUrl,
-        by_events: true,
-        base64: true,
-        events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
+        webhook_by_events: true,
+        webhook_base64: true,
+        events: [
+          "MESSAGES_UPSERT",
+          "CONNECTION_UPDATE",
+          "QRCODE_UPDATED"
+        ],
       },
     }
 
