@@ -42,7 +42,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
           url: webhookUrl,
           by_events: true,
           base64: true,
-          events: ['MESSAGES_UPSERT'],
+          events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
         }
       }
 

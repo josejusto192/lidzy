@@ -38,6 +38,47 @@ export async function POST(request: NextRequest) {
         provider = 'evolution'
       }
     }
+    // Evolution API - Connection Update
+    else if (body.event === 'connection.update' || body.event === 'CONNECTION_UPDATE') {
+      instanceId = body.instance
+      const connectionState = body.data?.state || body.state
+
+      console.log(`Evolution API connection update for ${instanceId}:`, connectionState)
+
+      // Atualizar status no banco
+      await supabase
+        .from('instancias')
+        .update({
+          ativo: connectionState === 'open',
+          session_data: {
+            connected: connectionState === 'open',
+            state: connectionState,
+            updated_at: new Date().toISOString()
+          }
+        })
+        .eq('instance_id', instanceId)
+
+      return NextResponse.json({ success: true })
+    }
+    // Evolution API - QR Code Update
+    else if (body.event === 'qrcode.updated' || body.event === 'QRCODE_UPDATED') {
+      instanceId = body.instance
+
+      console.log(`Evolution API QR code updated for ${instanceId}`)
+
+      // Atualizar QR code no banco
+      await supabase
+        .from('instancias')
+        .update({
+          session_data: {
+            qr: body.data?.qrcode || body.qrcode,
+            updated_at: new Date().toISOString()
+          }
+        })
+        .eq('instance_id', instanceId)
+
+      return NextResponse.json({ success: true })
+    }
     // Baileys webhook format
     else if (body.event) {
       event = body.event
@@ -104,12 +145,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
-    // Get instance from database
-    const { data: instance } = await supabase
+    // Limpar número de telefone (remover @s.whatsapp.net, etc)
+    const cleanPhone = from.replace(/@.*$/, '').replace(/[^0-9]/g, '')
+
+    // Get instance from database - buscar por instance_id ou provider_config->instanceId
+    let { data: instance } = await supabase
       .from('instancias')
       .select('*, usuarios(id)')
-      .eq('provider_config->instanceId', instanceId)
+      .eq('instance_id', instanceId)
       .single()
+
+    // Se não encontrar, tentar pelo provider_config
+    if (!instance) {
+      const { data: instanceByConfig } = await supabase
+        .from('instancias')
+        .select('*, usuarios(id)')
+        .eq('provider_config->instanceId', instanceId)
+        .single()
+
+      instance = instanceByConfig
+    }
 
     if (!instance) {
       console.log('Instance not found:', instanceId)
@@ -122,7 +177,7 @@ export async function POST(request: NextRequest) {
     let { data: contact } = await supabase
       .from('contatos')
       .select('id')
-      .eq('telefone', from)
+      .eq('telefone', cleanPhone)
       .eq('user_id', userId)
       .single()
 
@@ -131,9 +186,9 @@ export async function POST(request: NextRequest) {
         .from('contatos')
         .insert({
           user_id: userId,
-          telefone: from,
-          nome: from,
-          origem: `WhatsApp ${provider}`,
+          telefone: cleanPhone,
+          nome: cleanPhone,
+          origem: `WhatsApp Evolution API`,
         })
         .select('id')
         .single()
@@ -189,7 +244,7 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', conversation.id)
 
-    console.log(`Message saved from ${from} via ${provider}`)
+    console.log(`Message saved from ${cleanPhone} (${from}) via ${provider}`)
 
     return NextResponse.json({ success: true })
   } catch (error) {
