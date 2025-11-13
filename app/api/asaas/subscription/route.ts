@@ -18,7 +18,18 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { planoId, periodo, customerId } = body
+    const { planoId, periodo, customerId, billingType = "BOLETO", creditCard, creditCardHolderInfo } = body
+
+    // Validar tipo de pagamento
+    const validBillingTypes = ["BOLETO", "PIX", "CREDIT_CARD"]
+    if (!validBillingTypes.includes(billingType)) {
+      return NextResponse.json({ error: "Tipo de pagamento inválido" }, { status: 400 })
+    }
+
+    // Se for cartão de crédito, validar dados do cartão
+    if (billingType === "CREDIT_CARD" && (!creditCard || !creditCardHolderInfo)) {
+      return NextResponse.json({ error: "Dados do cartão de crédito são obrigatórios" }, { status: 400 })
+    }
 
     // Buscar dados do plano
     const { data: plano, error: planoError } = await supabase.from("planos").select("*").eq("id", planoId).single()
@@ -30,6 +41,22 @@ export async function POST(request: Request) {
     const valor = periodo === "yearly" ? plano.preco_anual : plano.preco_mensal
     const cycle = periodo === "yearly" ? "YEARLY" : "MONTHLY"
 
+    // Preparar payload para criar assinatura
+    const subscriptionPayload: any = {
+      customer: customerId,
+      billingType,
+      value: valor,
+      nextDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 7 dias
+      cycle,
+      description: `Assinatura ${plano.nome} - Lidzy`,
+    }
+
+    // Se for cartão de crédito, adicionar dados do cartão
+    if (billingType === "CREDIT_CARD") {
+      subscriptionPayload.creditCard = creditCard
+      subscriptionPayload.creditCardHolderInfo = creditCardHolderInfo
+    }
+
     // Criar assinatura no Asaas
     const response = await fetch(`${ASAAS_API_URL}/subscriptions`, {
       method: "POST",
@@ -37,14 +64,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
         access_token: ASAAS_API_KEY,
       },
-      body: JSON.stringify({
-        customer: customerId,
-        billingType: "BOLETO",
-        value: valor,
-        nextDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 7 dias
-        cycle,
-        description: `Assinatura ${plano.nome} - Lidzy`,
-      }),
+      body: JSON.stringify(subscriptionPayload),
     })
 
     if (!response.ok) {
@@ -78,10 +98,25 @@ export async function POST(request: Request) {
     // Atualizar usuário com assinatura_id
     await supabase.from("usuarios").update({ assinatura_id: assinatura.id }).eq("id", user.id)
 
-    return NextResponse.json({
+    // Preparar resposta de acordo com o tipo de pagamento
+    const responseData: any = {
       subscription: assinatura,
-      paymentUrl: subscriptionData.invoiceUrl,
-    })
+      billingType,
+    }
+
+    if (billingType === "BOLETO") {
+      responseData.paymentUrl = subscriptionData.invoiceUrl
+      responseData.boletoUrl = subscriptionData.bankSlipUrl
+    } else if (billingType === "PIX") {
+      responseData.paymentUrl = subscriptionData.invoiceUrl
+      responseData.pixQrCode = subscriptionData.pixQrCode
+      responseData.pixCopyPaste = subscriptionData.pixCopyPaste
+    } else if (billingType === "CREDIT_CARD") {
+      responseData.status = subscriptionData.status
+      responseData.message = "Assinatura criada com cartão de crédito"
+    }
+
+    return NextResponse.json(responseData)
   } catch (error) {
     console.error("[v0] Erro ao criar assinatura:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
