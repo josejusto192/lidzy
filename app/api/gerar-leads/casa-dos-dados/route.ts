@@ -467,6 +467,8 @@ export async function POST(request: NextRequest) {
         duplicatesSkipped > 0
           ? `${leads.length} novos contatos salvos (${creditsUsed} créditos usados). ${duplicatesSkipped} duplicados ignorados.`
           : `${leads.length} novos contatos salvos (${creditsUsed} créditos usados).`,
+      // DEBUG TEMPORÁRIO: retorna o primeiro item bruto para inspecionar os nomes dos campos
+      _debug_primeiro_item: empresas.length > 0 ? empresas[0] : null,
     })
   } catch (error) {
     console.error("[casa-dos-dados] Erro:", error)
