@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { cookies } from "next/headers"
 
 interface SerperPlace {
   title: string
@@ -95,24 +96,40 @@ export async function POST(request: NextRequest) {
 
     const regiaoNormalizada = normalizeRegion(regiao)
 
+    const serperApiKey = process.env.SERPER_API_KEY
+    if (!serperApiKey) {
+      console.error("[gerar-leads] SERPER_API_KEY não configurada")
+      return NextResponse.json({ error: "Serviço de busca não configurado." }, { status: 503 })
+    }
+
     const requests = Array.from({ length: numPaginas }, (_, i) =>
       fetch("https://google.serper.dev/places", {
         method: "POST",
         headers: {
-          "X-API-KEY": "717faf74d9e3b825b5f0de555958ce5964ae8133",
+          "X-API-KEY": serperApiKey,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           q: `${nicho} em ${regiaoNormalizada}`,
           gl: "br",
           hl: "pt-br",
-          page: (i + 1).toString(),
+          page: i + 1,
         }),
       }),
     )
 
     const responses = await Promise.all(requests)
-    const data: SerperResponse[] = await Promise.all(responses.map((res) => res.json()))
+
+    const data: SerperResponse[] = await Promise.all(
+      responses.map(async (res) => {
+        if (!res.ok) {
+          const text = await res.text()
+          console.error(`[gerar-leads] Serper retornou ${res.status}: ${text.slice(0, 200)}`)
+          throw new Error(`Serper API error: ${res.status}`)
+        }
+        return res.json() as Promise<SerperResponse>
+      }),
+    )
 
     const allPlaces = data.flatMap((response) => response.places || [])
 
@@ -192,9 +209,18 @@ export async function POST(request: NextRequest) {
     console.log(`[v0] Descontando ${creditsUsed} créditos pelos ${creditsUsed} leads novos inseridos`)
 
     if (creditsUsed > 0) {
+      const cookieStore = await cookies()
+      const cookieHeader = cookieStore
+        .getAll()
+        .map((c) => `${c.name}=${c.value}`)
+        .join("; ")
+
       const creditResponse = await fetch(`${request.nextUrl.origin}/api/creditos/usar`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookieHeader,
+        },
         body: JSON.stringify({
           quantidade: creditsUsed,
           tipo: "uso_lead",
@@ -203,7 +229,7 @@ export async function POST(request: NextRequest) {
       })
 
       if (!creditResponse.ok) {
-        console.error("[v0] Erro ao descontar créditos:", await creditResponse.text())
+        console.error("[gerar-leads] Erro ao descontar créditos:", await creditResponse.text())
       }
     }
 
