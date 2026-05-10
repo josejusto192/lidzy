@@ -2,37 +2,54 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 
-// ── Tipos da resposta da API Casa dos Dados v5 ──────────────────────────────
+// ── Tipos exatos da resposta v5 (documentação oficial) ───────────────────────
 
-interface CddTelefone {
-  ddd: string
-  numero: string
+interface CddSituacaoCadastral {
+  situacao_cadastral: string
+  motivo?: string
+  data?: string
 }
 
-interface CddEmail {
-  email: string
+interface CddPorteEmpresa {
+  codigo: string
+  descricao: string
 }
 
-interface CddCnpjItem {
-  cnpj: string
-  razao_social: string
-  nome_fantasia?: string
-  situacao_cadastral?: string
-  porte?: string
-  natureza_juridica?: string
-  cnae_fiscal?: string
-  cnae_fiscal_descricao?: string
-  capital_social?: number
-  data_inicio_atividade?: string
+interface CddEndereco {
+  cep?: string
+  tipo_logradouro?: string
   logradouro?: string
   numero?: string
   complemento?: string
   bairro?: string
-  municipio?: string
   uf?: string
-  cep?: string
-  telefones?: CddTelefone[]
-  emails?: CddEmail[]
+  municipio?: string
+  ibge?: { codigo_municipio?: number; codigo_uf?: number; latitude?: number; longitude?: number }
+}
+
+interface CddCnpjItem {
+  cnpj: string
+  cnpj_raiz?: string
+  razao_social: string
+  nome_fantasia?: string
+  situacao_cadastral?: CddSituacaoCadastral
+  porte_empresa?: CddPorteEmpresa
+  matriz_filial?: string
+  codigo_natureza_juridica?: string
+  descricao_natureza_juridica?: string
+  data_abertura?: string
+  capital_social?: number
+  endereco?: CddEndereco
+  // campos presentes no tipo_resultado=completo mas não documentados formalmente
+  cnae_fiscal?: string
+  cnae_fiscal_descricao?: string
+  // telefone/email variam conforme créditos — tratamos de forma defensiva
+  telefone?: string
+  ddd_telefone_1?: string
+  ddd_telefone_2?: string
+  email?: string
+  telefones?: Array<{ ddd?: string; numero?: string; tipo?: string }>
+  emails?: Array<{ email: string }>
 }
 
 interface CddResponse {
@@ -40,7 +57,7 @@ interface CddResponse {
   cnpjs: CddCnpjItem[]
 }
 
-// ── Payload de filtros aceito pelo frontend ──────────────────────────────────
+// ── Payload de filtros recebido do frontend ──────────────────────────────────
 
 interface CddFiltros {
   uf?: string[]
@@ -71,15 +88,27 @@ interface CddFiltros {
   pagina?: number
 }
 
+// Normaliza texto para o formato que a API espera (minúsculo, sem acento)
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+}
+
 function buildCddPayload(filtros: CddFiltros) {
   const payload: Record<string, unknown> = {
     limite: Math.min(filtros.limite ?? 100, 1000),
     pagina: filtros.pagina ?? 1,
   }
 
-  if (filtros.uf?.length) payload.uf = filtros.uf
-  if (filtros.municipio?.length) payload.municipio = filtros.municipio
-  if (filtros.bairro?.length) payload.bairro = filtros.bairro
+  // UF deve ser minúsculo conforme a documentação (ex: "sp", "rj")
+  if (filtros.uf?.length) payload.uf = filtros.uf.map((u) => u.toLowerCase())
+
+  // Município deve ser minúsculo e sem acentos (ex: "sao paulo")
+  if (filtros.municipio?.length) payload.municipio = filtros.municipio.map(normalizeText)
+  if (filtros.bairro?.length) payload.bairro = filtros.bairro.map(normalizeText)
   if (filtros.cep?.length) payload.cep = filtros.cep
   if (filtros.ddd?.length) payload.ddd = filtros.ddd
 
@@ -122,9 +151,10 @@ function buildCddPayload(filtros: CddFiltros) {
     }
   }
 
+  // mais_filtros conforme documentação oficial
   const maisFiltros: Record<string, boolean> = {}
-  if (filtros.com_email !== undefined) maisFiltros.com_email = filtros.com_email
-  if (filtros.com_telefone !== undefined) maisFiltros.com_telefone = filtros.com_telefone
+  if (filtros.com_email) maisFiltros.com_email = true
+  if (filtros.com_telefone) maisFiltros.com_telefone = true
   if (filtros.somente_celular) maisFiltros.somente_celular = true
   if (filtros.somente_fixo) maisFiltros.somente_fixo = true
   if (filtros.excluir_email_contab) maisFiltros.excluir_email_contab = true
@@ -134,7 +164,7 @@ function buildCddPayload(filtros: CddFiltros) {
     payload.busca_textual = [
       {
         texto: [filtros.busca_textual.trim()],
-        tipo_busca: "contendo",
+        tipo_busca: "radical",
         razao_social: true,
         nome_fantasia: true,
       },
@@ -144,26 +174,43 @@ function buildCddPayload(filtros: CddFiltros) {
   return payload
 }
 
-function formatPhone(item: CddCnpjItem): string | null {
-  if (!item.telefones?.length) return null
-
-  for (const t of item.telefones) {
-    const raw = `${t.ddd}${t.numero}`.replace(/\D/g, "")
+// Extrai telefone de várias estruturas possíveis na resposta completa
+function extractPhone(item: CddCnpjItem): string | null {
+  // Formato array de objetos {ddd, numero}
+  if (item.telefones?.length) {
+    for (const t of item.telefones) {
+      const raw = `${t.ddd ?? ""}${t.numero ?? ""}`.replace(/\D/g, "")
+      if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
+      if (raw.length >= 12 && raw.length <= 13) return raw
+    }
+  }
+  // Formato string direta (alguns planos)
+  if (item.ddd_telefone_1) {
+    const raw = item.ddd_telefone_1.replace(/\D/g, "")
     if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
-    if (raw.length >= 12 && raw.length <= 13) return raw
+    if (raw.length >= 12) return raw
+  }
+  if (item.telefone) {
+    const raw = item.telefone.replace(/\D/g, "")
+    if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
+    if (raw.length >= 12) return raw
   }
   return null
 }
 
+// Extrai email de várias estruturas possíveis
+function extractEmail(item: CddCnpjItem): string | null {
+  if (item.emails?.length) return item.emails[0].email
+  if (item.email) return item.email
+  return null
+}
+
+// Monta string de endereço a partir do objeto endereco aninhado
 function buildEndereco(item: CddCnpjItem): string | null {
-  const parts = [
-    item.logradouro,
-    item.numero,
-    item.complemento,
-    item.bairro,
-    item.municipio,
-    item.uf,
-  ].filter(Boolean)
+  const e = item.endereco
+  if (!e) return null
+  const parts = [e.logradouro, e.numero, e.complemento, e.bairro, e.municipio, e.uf]
+    .filter(Boolean)
   return parts.length ? parts.join(", ") : null
 }
 
@@ -187,9 +234,7 @@ export async function POST(request: NextRequest) {
     }
 
     const filtros: CddFiltros = await request.json()
-
     const limite = Math.min(filtros.limite ?? 100, 1000)
-    const estimatedLeads = limite
 
     const { data: usuario } = await supabase
       .from("usuarios")
@@ -197,12 +242,12 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id)
       .single()
 
-    if (!usuario || usuario.creditos < estimatedLeads) {
+    if (!usuario || usuario.creditos < limite) {
       return NextResponse.json(
         {
           error: "INSUFFICIENT_CREDITS",
-          message: `Créditos insuficientes. Você precisa de aproximadamente ${estimatedLeads} créditos. Saldo atual: ${usuario?.creditos || 0}.`,
-          required: estimatedLeads,
+          message: `Créditos insuficientes. Você precisa de aproximadamente ${limite} créditos. Saldo atual: ${usuario?.creditos || 0}.`,
+          required: limite,
           current: usuario?.creditos || 0,
         },
         { status: 402 },
@@ -211,20 +256,33 @@ export async function POST(request: NextRequest) {
 
     const payload = buildCddPayload({ ...filtros, limite })
 
-    const cddResponse = await fetch("https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultado=completo", {
-      method: "POST",
-      headers: {
-        "api-key": apiKey,
-        "Content-Type": "application/json",
+    console.log("[casa-dos-dados] Payload enviado:", JSON.stringify(payload, null, 2))
+
+    const cddResponse = await fetch(
+      "https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultado=completo",
+      {
+        method: "POST",
+        headers: {
+          "api-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    })
+    )
 
     if (!cddResponse.ok) {
       const text = await cddResponse.text()
-      console.error(`[casa-dos-dados] API retornou ${cddResponse.status}: ${text.slice(0, 300)}`)
+      console.error(`[casa-dos-dados] API retornou ${cddResponse.status}: ${text.slice(0, 500)}`)
       return NextResponse.json(
-        { error: "Erro ao consultar a API da Casa dos Dados.", details: text.slice(0, 200) },
+        {
+          error: cddResponse.status === 401
+            ? "Chave da API inválida."
+            : cddResponse.status === 403
+            ? "Saldo insuficiente na Casa dos Dados."
+            : "Erro ao consultar a API da Casa dos Dados.",
+          details: text.slice(0, 300),
+          status: cddResponse.status,
+        },
         { status: 502 },
       )
     }
@@ -234,33 +292,48 @@ export async function POST(request: NextRequest) {
 
     console.log(`[casa-dos-dados] API retornou ${empresas.length} de ${cddData.total} total`)
 
-    const rawLeads = empresas.map((item) => ({
-      nome_empresa: item.nome_fantasia || item.razao_social,
-      cnpj: item.cnpj,
-      telefone: formatPhone(item),
-      email: item.emails?.[0]?.email || null,
-      endereco: buildEndereco(item),
-      regiao: item.municipio ? `${item.municipio}${item.uf ? ` - ${item.uf}` : ""}` : item.uf || null,
-      nicho: item.cnae_fiscal_descricao || null,
-      situacao_cadastral: item.situacao_cadastral || null,
-      porte_empresa: item.porte || null,
-      natureza_juridica: item.natureza_juridica || null,
-      cnae_principal: item.cnae_fiscal || null,
-      data_abertura: item.data_inicio_atividade || null,
-      capital_social: item.capital_social ?? null,
-      status: "novo_lead",
-      origem: "casa_dos_dados",
-      user_id: user.id,
-      fonte_detalhes: {
-        razao_social: item.razao_social,
-        cnae_descricao: item.cnae_fiscal_descricao || null,
-        municipio: item.municipio || null,
-        uf: item.uf || null,
-        cep: item.cep || null,
-      },
-    }))
+    const rawLeads = empresas.map((item) => {
+      // situacao_cadastral é objeto aninhado na v5
+      const situacao = typeof item.situacao_cadastral === "object"
+        ? item.situacao_cadastral?.situacao_cadastral
+        : (item.situacao_cadastral as unknown as string) || null
 
-    // Deduplicar internamente pelo CNPJ (prioridade) ou telefone
+      // porte_empresa é objeto aninhado na v5
+      const porte = item.porte_empresa?.descricao || item.porte_empresa?.codigo || null
+
+      const endereco = item.endereco
+      const municipio = endereco?.municipio || null
+      const uf = endereco?.uf || null
+
+      return {
+        nome_empresa: item.nome_fantasia || item.razao_social,
+        cnpj: item.cnpj,
+        telefone: extractPhone(item),
+        email: extractEmail(item),
+        endereco: buildEndereco(item),
+        regiao: municipio ? `${municipio}${uf ? ` - ${uf.toUpperCase()}` : ""}` : uf?.toUpperCase() || null,
+        nicho: item.cnae_fiscal_descricao || null,
+        situacao_cadastral: situacao,
+        porte_empresa: porte,
+        natureza_juridica: item.descricao_natureza_juridica || null,
+        cnae_principal: item.cnae_fiscal || null,
+        data_abertura: item.data_abertura || null,
+        capital_social: item.capital_social ?? null,
+        status: "novo_lead",
+        origem: "casa_dos_dados",
+        user_id: user.id,
+        fonte_detalhes: {
+          razao_social: item.razao_social,
+          cnae_descricao: item.cnae_fiscal_descricao || null,
+          municipio,
+          uf,
+          cep: endereco?.cep || null,
+          bairro: endereco?.bairro || null,
+        },
+      }
+    })
+
+    // Deduplicar internamente por CNPJ (prioridade) ou telefone
     const seenKeys = new Set<string>()
     const uniqueLeads = rawLeads.filter((lead) => {
       const key = lead.cnpj || lead.telefone
@@ -269,17 +342,17 @@ export async function POST(request: NextRequest) {
       return true
     })
 
-    // Verificar duplicatas no banco por CNPJ e por telefone
+    // Verificar duplicatas existentes no banco
     const cnpjs = uniqueLeads.map((l) => l.cnpj).filter(Boolean) as string[]
     const phones = uniqueLeads.map((l) => l.telefone).filter(Boolean) as string[]
 
     const [{ data: existingByCnpj }, { data: existingByPhone }] = await Promise.all([
       cnpjs.length
         ? supabase.from("contatos").select("cnpj").in("cnpj", cnpjs).eq("user_id", user.id)
-        : Promise.resolve({ data: [] }),
+        : Promise.resolve({ data: [] as { cnpj: string }[] }),
       phones.length
         ? supabase.from("contatos").select("telefone").in("telefone", phones).eq("user_id", user.id)
-        : Promise.resolve({ data: [] }),
+        : Promise.resolve({ data: [] as { telefone: string }[] }),
     ])
 
     const existingCnpjs = new Set(existingByCnpj?.map((c) => c.cnpj) || [])
