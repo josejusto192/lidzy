@@ -308,6 +308,10 @@ export async function POST(request: NextRequest) {
     const empresas = cddData.cnpjs || []
 
     console.log(`[casa-dos-dados] API retornou ${empresas.length} de ${cddData.total} total`)
+    // Log temporário: exibe o primeiro item bruto para inspecionar a estrutura da resposta
+    if (empresas.length > 0) {
+      console.log("[casa-dos-dados] PRIMEIRO ITEM BRUTO:", JSON.stringify(empresas[0], null, 2))
+    }
 
     const rawLeads = empresas.map((item) => {
       // situacao_cadastral é objeto aninhado na v5
