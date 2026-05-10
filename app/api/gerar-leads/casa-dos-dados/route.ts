@@ -5,7 +5,8 @@ import { cookies } from "next/headers"
 // ── Tipos exatos da resposta real da API CDD (inspecionado via _debug_primeiro_item) ──
 
 interface CddSituacaoCadastral {
-  situacao_atual?: string   // campo real é "situacao_atual", não "situacao_cadastral"
+  situacao_atual?: string      // campo real na resposta v5
+  situacao_cadastral?: string  // nome conforme documentação (fallback)
   motivo?: string
   data?: string
 }
@@ -294,8 +295,10 @@ export async function POST(request: NextRequest) {
     }
 
     const rawLeads = empresas.map((item) => {
-      // campo real é "situacao_atual" dentro do objeto situacao_cadastral
-      const situacao = item.situacao_cadastral?.situacao_atual || null
+      // API v5 retorna "situacao_atual"; docs mostram "situacao_cadastral" — cobre os dois
+      const situacao = item.situacao_cadastral?.situacao_atual
+        || item.situacao_cadastral?.situacao_cadastral
+        || null
 
       const porte = item.porte_empresa?.descricao || item.porte_empresa?.codigo || null
 
