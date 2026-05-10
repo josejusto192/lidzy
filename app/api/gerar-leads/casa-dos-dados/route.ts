@@ -212,6 +212,16 @@ function extractPhone(item: CddCnpjItem): string | null {
     const p = normalizePhone(item.telefone)
     if (p) return p
   }
+  console.log("[casa-dos-dados] telefone nulo para", item.cnpj, {
+    telefones: item.telefones,
+    ddd_telefone_1: (item as Record<string, unknown>).ddd_telefone_1,
+    telefone_1: (item as Record<string, unknown>).telefone_1,
+    telefone: item.telefone,
+    // loga TODAS as chaves do item para descobrir o nome exato do campo
+    allKeys: Object.keys(item as Record<string, unknown>).filter((k) =>
+      k.toLowerCase().includes("tel") || k.toLowerCase().includes("fone") || k.toLowerCase().includes("ddd")
+    ),
+  })
   return null
 }
 
