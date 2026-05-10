@@ -252,10 +252,11 @@ export async function POST(request: NextRequest) {
       origem: "casa_dos_dados",
       user_id: user.id,
       fonte_detalhes: {
-        cnae_descricao: item.cnae_fiscal_descricao,
-        municipio: item.municipio,
-        uf: item.uf,
-        cep: item.cep,
+        razao_social: item.razao_social,
+        cnae_descricao: item.cnae_fiscal_descricao || null,
+        municipio: item.municipio || null,
+        uf: item.uf || null,
+        cep: item.cep || null,
       },
     }))
 
