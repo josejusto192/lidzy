@@ -23,6 +23,8 @@ import {
   FolderKanban,
   Tag,
   ExternalLink,
+  FileText,
+  TrendingUp,
 } from "lucide-react"
 import { STATUS_CONFIG } from "@/lib/status-config"
 import { ContactTagsManager } from "@/components/contact-tags-manager"
@@ -45,6 +47,13 @@ interface Contato {
   data_contato?: string
   photo?: string
   tags?: Array<{ id: string; nome: string; cor: string }>
+  // Campos da Receita Federal (via Casa dos Dados)
+  situacao_cadastral?: string
+  porte_empresa?: string
+  natureza_juridica?: string
+  cnae_principal?: string
+  data_abertura?: string
+  capital_social?: number
 }
 
 interface Projeto {
@@ -333,6 +342,72 @@ export default function ContatoPerfilPage() {
                     onTagsChange={fetchContatoDetalhes}
                   />
                 </div>
+
+                {/* Dados da Receita Federal */}
+                {(contato.situacao_cadastral || contato.porte_empresa || contato.natureza_juridica ||
+                  contato.cnae_principal || contato.data_abertura || contato.capital_social != null) && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                        <p className="text-sm font-medium">Dados da Receita Federal</p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {contato.situacao_cadastral && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Situação Cadastral</p>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                contato.situacao_cadastral === "ATIVA"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                  : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                              }`}
+                            >
+                              {contato.situacao_cadastral}
+                            </span>
+                          </div>
+                        )}
+                        {contato.porte_empresa && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Porte</p>
+                            <p className="text-sm font-medium">{contato.porte_empresa}</p>
+                          </div>
+                        )}
+                        {contato.cnae_principal && (
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-muted-foreground mb-1">CNAE Principal</p>
+                            <p className="text-sm font-mono">{contato.cnae_principal}</p>
+                          </div>
+                        )}
+                        {contato.natureza_juridica && (
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-muted-foreground mb-1">Natureza Jurídica</p>
+                            <p className="text-sm font-medium">{contato.natureza_juridica}</p>
+                          </div>
+                        )}
+                        {contato.data_abertura && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Data de Abertura</p>
+                            <p className="text-sm font-medium">
+                              {new Date(contato.data_abertura + "T00:00:00").toLocaleDateString("pt-BR")}
+                            </p>
+                          </div>
+                        )}
+                        {contato.capital_social != null && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Capital Social</p>
+                            <p className="text-sm font-medium">
+                              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                                contato.capital_social,
+                              )}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 

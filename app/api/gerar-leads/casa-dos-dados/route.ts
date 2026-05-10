@@ -43,10 +43,13 @@ interface CddCnpjItem {
   // campos presentes no tipo_resultado=completo mas não documentados formalmente
   cnae_fiscal?: string
   cnae_fiscal_descricao?: string
-  // telefone/email variam conforme créditos — tratamos de forma defensiva
+  // telefone/email variam conforme créditos e versão da API — tratamos de forma defensiva
+  // CDD v5: ddd_telefone_N contém só o DDD; telefone_N contém o número sem DDD
   telefone?: string
   ddd_telefone_1?: string
+  telefone_1?: string
   ddd_telefone_2?: string
+  telefone_2?: string
   email?: string
   telefones?: Array<{ ddd?: string; numero?: string; tipo?: string }>
   emails?: Array<{ email: string }>
@@ -174,26 +177,40 @@ function buildCddPayload(filtros: CddFiltros) {
   return payload
 }
 
-// Extrai telefone de várias estruturas possíveis na resposta completa
+function normalizePhone(raw: string): string | null {
+  const digits = raw.replace(/\D/g, "")
+  if (digits.length >= 10 && digits.length <= 11) return `55${digits}`
+  if (digits.length >= 12 && digits.length <= 13) return digits
+  return null
+}
+
+// Extrai telefone de várias estruturas possíveis na resposta da CDD
 function extractPhone(item: CddCnpjItem): string | null {
-  // Formato array de objetos {ddd, numero}
+  // Formato array de objetos {ddd, numero} (tipo_resultado=completo)
   if (item.telefones?.length) {
     for (const t of item.telefones) {
-      const raw = `${t.ddd ?? ""}${t.numero ?? ""}`.replace(/\D/g, "")
-      if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
-      if (raw.length >= 12 && raw.length <= 13) return raw
+      const p = normalizePhone(`${t.ddd ?? ""}${t.numero ?? ""}`)
+      if (p) return p
     }
   }
-  // Formato string direta (alguns planos)
-  if (item.ddd_telefone_1) {
-    const raw = item.ddd_telefone_1.replace(/\D/g, "")
-    if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
-    if (raw.length >= 12) return raw
+  // CDD v5: ddd_telefone_N = só DDD (ex: "11"), telefone_N = número sem DDD (ex: "912345678")
+  if (item.ddd_telefone_1 && item.telefone_1) {
+    const p = normalizePhone(`${item.ddd_telefone_1}${item.telefone_1}`)
+    if (p) return p
   }
+  if (item.ddd_telefone_2 && item.telefone_2) {
+    const p = normalizePhone(`${item.ddd_telefone_2}${item.telefone_2}`)
+    if (p) return p
+  }
+  // Fallback: ddd_telefone_1 pode conter número completo em alguns planos
+  if (item.ddd_telefone_1) {
+    const p = normalizePhone(item.ddd_telefone_1)
+    if (p) return p
+  }
+  // Campo genérico telefone
   if (item.telefone) {
-    const raw = item.telefone.replace(/\D/g, "")
-    if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
-    if (raw.length >= 12) return raw
+    const p = normalizePhone(item.telefone)
+    if (p) return p
   }
   return null
 }
