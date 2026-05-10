@@ -54,6 +54,23 @@ interface Contato {
   cnae_principal?: string
   data_abertura?: string
   capital_social?: number
+  fonte_detalhes?: {
+    cep?: string
+    bairro?: string
+    complemento?: string
+    tipo_logradouro?: string
+    matriz_filial?: string
+    cnpj_raiz?: string
+    mei_optante?: boolean | null
+    simples_optante?: boolean | null
+    atividade_secundaria?: Array<{ codigo: string; descricao: string }>
+    quadro_societario?: Array<{
+      nome?: string
+      qualificacao_socio?: string
+      documento?: string
+      faixa_etaria_descricao?: string
+    }>
+  }
 }
 
 interface Projeto {
@@ -345,7 +362,8 @@ export default function ContatoPerfilPage() {
 
                 {/* Dados da Receita Federal */}
                 {(contato.situacao_cadastral || contato.porte_empresa || contato.natureza_juridica ||
-                  contato.cnae_principal || contato.data_abertura || contato.capital_social != null) && (
+                  contato.cnae_principal || contato.data_abertura || contato.capital_social != null ||
+                  contato.fonte_detalhes) && (
                   <>
                     <Separator />
                     <div>
@@ -353,17 +371,17 @@ export default function ContatoPerfilPage() {
                         <FileText className="h-5 w-5 text-muted-foreground" />
                         <p className="text-sm font-medium">Dados da Receita Federal</p>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                      {/* Linha 1: situação + porte + matriz/filial */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         {contato.situacao_cadastral && (
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">Situação Cadastral</p>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                contato.situacao_cadastral === "ATIVA"
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                                  : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                              }`}
-                            >
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                              contato.situacao_cadastral === "ATIVA"
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                            }`}>
                               {contato.situacao_cadastral}
                             </span>
                           </div>
@@ -374,18 +392,47 @@ export default function ContatoPerfilPage() {
                             <p className="text-sm font-medium">{contato.porte_empresa}</p>
                           </div>
                         )}
+                        {contato.fonte_detalhes?.matriz_filial && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Tipo</p>
+                            <p className="text-sm font-medium">{contato.fonte_detalhes.matriz_filial}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Linha 2: CNAE principal + natureza jurídica */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         {contato.cnae_principal && (
-                          <div className="md:col-span-2">
+                          <div>
                             <p className="text-xs text-muted-foreground mb-1">CNAE Principal</p>
                             <p className="text-sm font-mono">{contato.cnae_principal}</p>
                           </div>
                         )}
                         {contato.natureza_juridica && (
-                          <div className="md:col-span-2">
+                          <div>
                             <p className="text-xs text-muted-foreground mb-1">Natureza Jurídica</p>
                             <p className="text-sm font-medium">{contato.natureza_juridica}</p>
                           </div>
                         )}
+                      </div>
+
+                      {/* CNAE secundário */}
+                      {contato.fonte_detalhes?.atividade_secundaria?.length ? (
+                        <div className="mb-4">
+                          <p className="text-xs text-muted-foreground mb-2">CNAEs Secundários</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {contato.fonte_detalhes.atividade_secundaria.map((a) => (
+                              <span key={a.codigo} className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs">
+                                <span className="font-mono mr-1.5 text-muted-foreground">{a.codigo}</span>
+                                {a.descricao}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* Linha 3: data abertura + capital + MEI + Simples */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                         {contato.data_abertura && (
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">Data de Abertura</p>
@@ -398,13 +445,70 @@ export default function ContatoPerfilPage() {
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">Capital Social</p>
                             <p className="text-sm font-medium">
-                              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                                contato.capital_social,
-                              )}
+                              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(contato.capital_social)}
                             </p>
                           </div>
                         )}
+                        {contato.fonte_detalhes?.mei_optante != null && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">MEI</p>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              contato.fonte_detalhes.mei_optante
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                                : "bg-secondary text-muted-foreground"
+                            }`}>
+                              {contato.fonte_detalhes.mei_optante ? "Optante" : "Não optante"}
+                            </span>
+                          </div>
+                        )}
+                        {contato.fonte_detalhes?.simples_optante != null && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Simples Nacional</p>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              contato.fonte_detalhes.simples_optante
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                                : "bg-secondary text-muted-foreground"
+                            }`}>
+                              {contato.fonte_detalhes.simples_optante ? "Optante" : "Não optante"}
+                            </span>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Endereço completo com CEP */}
+                      {(contato.fonte_detalhes?.cep || contato.fonte_detalhes?.bairro) && (
+                        <div className="mb-4">
+                          <p className="text-xs text-muted-foreground mb-1">CEP / Bairro</p>
+                          <p className="text-sm font-medium">
+                            {[
+                              contato.fonte_detalhes.cep,
+                              contato.fonte_detalhes.bairro,
+                            ].filter(Boolean).join(" — ")}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Quadro Societário */}
+                      {contato.fonte_detalhes?.quadro_societario?.length ? (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2">Quadro Societário</p>
+                          <div className="space-y-2">
+                            {contato.fonte_detalhes.quadro_societario.map((socio, i) => (
+                              <div key={i} className="flex items-start justify-between rounded-lg bg-secondary px-3 py-2 text-sm">
+                                <div>
+                                  <p className="font-medium">{socio.nome || "—"}</p>
+                                  {socio.qualificacao_socio && (
+                                    <p className="text-xs text-muted-foreground">{socio.qualificacao_socio}</p>
+                                  )}
+                                </div>
+                                {socio.faixa_etaria_descricao && (
+                                  <span className="text-xs text-muted-foreground">{socio.faixa_etaria_descricao}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </>
                 )}

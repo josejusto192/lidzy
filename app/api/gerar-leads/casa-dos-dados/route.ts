@@ -49,6 +49,12 @@ interface CddCnpjItem {
   contato_email?: Array<{ email: string; valido?: boolean; dominio?: string }>
   mei?: { optante?: boolean }
   simples?: { optante?: boolean }
+  quadro_societario?: Array<{
+    nome?: string
+    qualificacao_socio?: string
+    documento?: string
+    faixa_etaria_descricao?: string
+  }>
 }
 
 interface CddResponse {
@@ -337,6 +343,14 @@ export async function POST(request: NextRequest) {
           uf,
           cep: endereco?.cep || null,
           bairro: endereco?.bairro || null,
+          tipo_logradouro: endereco?.tipo_logradouro || null,
+          complemento: endereco?.complemento || null,
+          matriz_filial: item.matriz_filial || null,
+          cnpj_raiz: item.cnpj_raiz || null,
+          mei_optante: item.mei?.optante ?? null,
+          simples_optante: item.simples?.optante ?? null,
+          atividade_secundaria: item.atividade_secundaria?.length ? item.atividade_secundaria : null,
+          quadro_societario: item.quadro_societario?.length ? item.quadro_societario : null,
         },
       }
     })
