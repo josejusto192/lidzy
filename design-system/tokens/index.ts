@@ -1,0 +1,8 @@
+// Lidzy Design System — Token Exports
+
+export { colors } from "./colors"
+export type { ColorToken } from "./colors"
+
+export { typography } from "./typography"
+
+export { spacing } from "./spacing"

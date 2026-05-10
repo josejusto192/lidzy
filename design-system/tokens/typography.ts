@@ -1,0 +1,50 @@
+// Lidzy Design System — Typography Tokens
+
+export const typography = {
+  // --- Fontes ---
+  fonts: {
+    // Fonte principal do projeto (Google Fonts)
+    // Configurada em: app/layout.tsx via next/font/google
+    // CSS variable: --font-sora → usada como --font-sans
+    primary: {
+      name: "Sora",
+      variable: "--font-sora",
+      cssVar: "var(--font-sora)",
+      subsets: ["latin"],
+      display: "swap" as const,
+      source: "https://fonts.google.com/specimen/Sora",
+    },
+  },
+
+  // --- Escala de Tamanhos (Tailwind padrão) ---
+  sizes: {
+    xs: "0.75rem",    // 12px
+    sm: "0.875rem",   // 14px
+    base: "1rem",     // 16px
+    lg: "1.125rem",   // 18px
+    xl: "1.25rem",    // 20px
+    "2xl": "1.5rem",  // 24px
+    "3xl": "1.875rem",// 30px
+    "4xl": "2.25rem", // 36px
+    "5xl": "3rem",    // 48px
+  },
+
+  // --- Pesos ---
+  weights: {
+    light: "300",
+    normal: "400",
+    medium: "500",
+    semibold: "600",
+    bold: "700",
+    extrabold: "800",
+  },
+
+  // --- Alturas de Linha ---
+  lineHeights: {
+    tight: "1.25",
+    snug: "1.375",
+    normal: "1.5",
+    relaxed: "1.625",
+    loose: "2",
+  },
+} as const
