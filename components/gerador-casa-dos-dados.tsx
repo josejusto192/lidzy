@@ -1,18 +1,102 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Search, ChevronDown, ChevronUp } from "lucide-react"
+import { Loader2, Search, ChevronDown, ChevronUp, X, Check } from "lucide-react"
+import { searchCnaes, type Cnae } from "@/lib/cnaes"
 
 const UF_OPTIONS = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
   "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
 ]
+
+// ── Combobox de CNAE ────────────────────────────────────────────────────────
+
+function CnaeCombobox({
+  value,
+  onChange,
+  placeholder = "Buscar CNAE...",
+  disabled,
+}: {
+  value: Cnae | null
+  onChange: (cnae: Cnae | null) => void
+  placeholder?: string
+  disabled?: boolean
+}) {
+  const [query, setQuery] = useState("")
+  const [open, setOpen] = useState(false)
+  const results = searchCnaes(query)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex items-center gap-2 rounded-md border border-input bg-secondary px-3 py-2">
+        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <input
+          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+          placeholder={value ? `${value.codigo} — ${value.descricao}` : placeholder}
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          disabled={disabled}
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => { onChange(null); setQuery("") }}
+            className="text-muted-foreground hover:text-foreground"
+            disabled={disabled}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {open && query.length >= 2 && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-lg">
+          {results.length === 0 ? (
+            <p className="p-3 text-center text-sm text-muted-foreground">Nenhum CNAE encontrado.</p>
+          ) : (
+            <ul className="max-h-60 overflow-y-auto py-1">
+              {results.map((cnae) => (
+                <li key={cnae.codigo}>
+                  <button
+                    type="button"
+                    className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+                    onClick={() => { onChange(cnae); setQuery(""); setOpen(false) }}
+                  >
+                    {value?.codigo === cnae.codigo && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
+                    <span className={value?.codigo === cnae.codigo ? "ml-0" : "ml-5"}>
+                      <span className="font-mono text-xs text-muted-foreground">{cnae.codigo}</span>
+                      <span className="mx-1.5 text-muted-foreground">—</span>
+                      <span>{cnae.descricao}</span>
+                      <span className="ml-2 text-xs text-muted-foreground/60">({cnae.secao})</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Opções fixas ─────────────────────────────────────────────────────────────
 
 const SITUACAO_OPTIONS = [
   { value: "ATIVA", label: "Ativa" },
@@ -51,7 +135,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
   // Filtros básicos
   const [ufs, setUfs] = useState<string[]>([])
   const [municipio, setMunicipio] = useState("")
-  const [cnaePrincipal, setCnaePrincipal] = useState("")
+  const [cnaePrincipal, setCnaePrincipal] = useState<Cnae | null>(null)
   const [situacaoCadastral, setSituacaoCadastral] = useState<string[]>(["ATIVA"])
   const [limite, setLimite] = useState(100)
   const [buscaTextual, setBuscaTextual] = useState("")
@@ -64,7 +148,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
   const [dataAberturaFim, setDataAberturaFim] = useState("")
   const [capitalMin, setCapitalMin] = useState("")
   const [capitalMax, setCapitalMax] = useState("")
-  const [cnaeSecundario, setCnaeSecundario] = useState("")
+  const [cnaeSecundario, setCnaeSecundario] = useState<Cnae | null>(null)
   const [naturezaJuridica, setNaturezaJuridica] = useState("")
 
   // Filtros de qualificação
@@ -97,7 +181,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
 
     if (ufs.length) filtros.uf = ufs
     if (municipio.trim()) filtros.municipio = [municipio.trim()]
-    if (cnaePrincipal.trim()) filtros.codigo_atividade_principal = [cnaePrincipal.trim()]
+    if (cnaePrincipal) filtros.codigo_atividade_principal = [cnaePrincipal.codigo]
     if (situacaoCadastral.length) filtros.situacao_cadastral = situacaoCadastral
     if (buscaTextual.trim()) filtros.busca_textual = buscaTextual.trim()
 
@@ -108,7 +192,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
     if (dataAberturaFim) filtros.data_abertura_fim = dataAberturaFim
     if (capitalMin) filtros.capital_social_minimo = Number(capitalMin)
     if (capitalMax) filtros.capital_social_maximo = Number(capitalMax)
-    if (cnaeSecundario.trim()) filtros.codigo_atividade_secundaria = [cnaeSecundario.trim()]
+    if (cnaeSecundario) filtros.codigo_atividade_secundaria = [cnaeSecundario.codigo]
     if (naturezaJuridica.trim()) filtros.codigo_natureza_juridica = [naturezaJuridica.trim()]
 
     filtros.com_telefone = comTelefone
@@ -234,13 +318,15 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
         <Label className="mb-2 block text-sm font-medium text-card-foreground">
           CNAE Principal
         </Label>
-        <Input
-          placeholder="Ex: 4120400 (Construção de edifícios)"
+        <CnaeCombobox
           value={cnaePrincipal}
-          onChange={(e) => setCnaePrincipal(e.target.value)}
-          className="bg-secondary"
+          onChange={setCnaePrincipal}
+          placeholder="Digite código ou atividade..."
           disabled={loading}
         />
+        {cnaePrincipal && (
+          <p className="mt-1 text-xs text-muted-foreground">{cnaePrincipal.secao}</p>
+        )}
       </div>
 
       {/* Situação Cadastral */}
@@ -346,12 +432,12 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
             {/* Matriz/Filial */}
             <div>
               <Label className="mb-2 block text-sm font-medium text-card-foreground">Matriz / Filial</Label>
-              <Select value={matrizFilial} onValueChange={setMatrizFilial} disabled={loading}>
+              <Select value={matrizFilial || "ambos"} onValueChange={(v) => setMatrizFilial(v === "ambos" ? "" : v)} disabled={loading}>
                 <SelectTrigger className="bg-secondary">
                   <SelectValue placeholder="Ambos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Ambos</SelectItem>
+                  <SelectItem value="ambos">Ambos</SelectItem>
                   <SelectItem value="MATRIZ">Somente Matriz</SelectItem>
                   <SelectItem value="FILIAL">Somente Filial</SelectItem>
                 </SelectContent>
@@ -425,13 +511,15 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
             {/* CNAE Secundário */}
             <div>
               <Label className="mb-2 block text-sm font-medium text-card-foreground">CNAE Secundário</Label>
-              <Input
-                placeholder="Ex: 9602501"
+              <CnaeCombobox
                 value={cnaeSecundario}
-                onChange={(e) => setCnaeSecundario(e.target.value)}
-                className="bg-secondary"
+                onChange={setCnaeSecundario}
+                placeholder="Digite código ou atividade..."
                 disabled={loading}
               />
+              {cnaeSecundario && (
+                <p className="mt-1 text-xs text-muted-foreground">{cnaeSecundario.secao}</p>
+              )}
             </div>
 
             {/* Natureza Jurídica */}
@@ -598,9 +686,9 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
                 </div>
               )}
               {cnaePrincipal && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">CNAE:</span>
-                  <span className="font-medium">{cnaePrincipal}</span>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">CNAE:</span>
+                  <span className="font-medium text-right">{cnaePrincipal.codigo} — {cnaePrincipal.descricao}</span>
                 </div>
               )}
               <div className="flex justify-between">
