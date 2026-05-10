@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 
-// ── Tipos exatos da resposta v5 (documentação oficial) ───────────────────────
+// ── Tipos exatos da resposta real da API CDD (inspecionado via _debug_primeiro_item) ──
 
 interface CddSituacaoCadastral {
-  situacao_cadastral: string
+  situacao_atual?: string   // campo real é "situacao_atual", não "situacao_cadastral"
   motivo?: string
   data?: string
 }
@@ -40,19 +40,14 @@ interface CddCnpjItem {
   data_abertura?: string
   capital_social?: number
   endereco?: CddEndereco
-  // campos presentes no tipo_resultado=completo mas não documentados formalmente
-  cnae_fiscal?: string
-  cnae_fiscal_descricao?: string
-  // telefone/email variam conforme créditos e versão da API — tratamos de forma defensiva
-  // CDD v5: ddd_telefone_N contém só o DDD; telefone_N contém o número sem DDD
-  telefone?: string
-  ddd_telefone_1?: string
-  telefone_1?: string
-  ddd_telefone_2?: string
-  telefone_2?: string
-  email?: string
-  telefones?: Array<{ ddd?: string; numero?: string; tipo?: string }>
-  emails?: Array<{ email: string }>
+  // CNAE real: atividade_principal / atividade_secundaria (não cnae_fiscal)
+  atividade_principal?: { codigo: string; descricao: string }
+  atividade_secundaria?: Array<{ codigo: string; descricao: string }>
+  // Contato real: contato_telefonico / contato_email (não telefones/emails)
+  contato_telefonico?: Array<{ completo?: string; ddd?: string; numero?: string; tipo?: string }>
+  contato_email?: Array<{ email: string; valido?: boolean; dominio?: string }>
+  mei?: { optante?: boolean }
+  simples?: { optante?: boolean }
 }
 
 interface CddResponse {
@@ -184,51 +179,26 @@ function normalizePhone(raw: string): string | null {
   return null
 }
 
-// Extrai telefone de várias estruturas possíveis na resposta da CDD
+// Extrai telefone da estrutura real da CDD: contato_telefonico[].completo ou ddd+numero
 function extractPhone(item: CddCnpjItem): string | null {
-  // Formato array de objetos {ddd, numero} (tipo_resultado=completo)
-  if (item.telefones?.length) {
-    for (const t of item.telefones) {
-      const p = normalizePhone(`${t.ddd ?? ""}${t.numero ?? ""}`)
-      if (p) return p
+  if (item.contato_telefonico?.length) {
+    for (const t of item.contato_telefonico) {
+      if (t.completo) {
+        const p = normalizePhone(t.completo)
+        if (p) return p
+      }
+      if (t.ddd && t.numero) {
+        const p = normalizePhone(`${t.ddd}${t.numero}`)
+        if (p) return p
+      }
     }
   }
-  // CDD v5: ddd_telefone_N = só DDD (ex: "11"), telefone_N = número sem DDD (ex: "912345678")
-  if (item.ddd_telefone_1 && item.telefone_1) {
-    const p = normalizePhone(`${item.ddd_telefone_1}${item.telefone_1}`)
-    if (p) return p
-  }
-  if (item.ddd_telefone_2 && item.telefone_2) {
-    const p = normalizePhone(`${item.ddd_telefone_2}${item.telefone_2}`)
-    if (p) return p
-  }
-  // Fallback: ddd_telefone_1 pode conter número completo em alguns planos
-  if (item.ddd_telefone_1) {
-    const p = normalizePhone(item.ddd_telefone_1)
-    if (p) return p
-  }
-  // Campo genérico telefone
-  if (item.telefone) {
-    const p = normalizePhone(item.telefone)
-    if (p) return p
-  }
-  console.log("[casa-dos-dados] telefone nulo para", item.cnpj, {
-    telefones: item.telefones,
-    ddd_telefone_1: (item as Record<string, unknown>).ddd_telefone_1,
-    telefone_1: (item as Record<string, unknown>).telefone_1,
-    telefone: item.telefone,
-    // loga TODAS as chaves do item para descobrir o nome exato do campo
-    allKeys: Object.keys(item as Record<string, unknown>).filter((k) =>
-      k.toLowerCase().includes("tel") || k.toLowerCase().includes("fone") || k.toLowerCase().includes("ddd")
-    ),
-  })
   return null
 }
 
-// Extrai email de várias estruturas possíveis
+// Extrai email da estrutura real da CDD: contato_email[].email
 function extractEmail(item: CddCnpjItem): string | null {
-  if (item.emails?.length) return item.emails[0].email
-  if (item.email) return item.email
+  if (item.contato_email?.length) return item.contato_email[0].email
   return null
 }
 
@@ -324,17 +294,21 @@ export async function POST(request: NextRequest) {
     }
 
     const rawLeads = empresas.map((item) => {
-      // situacao_cadastral é objeto aninhado na v5
-      const situacao = typeof item.situacao_cadastral === "object"
-        ? item.situacao_cadastral?.situacao_cadastral
-        : (item.situacao_cadastral as unknown as string) || null
+      // campo real é "situacao_atual" dentro do objeto situacao_cadastral
+      const situacao = item.situacao_cadastral?.situacao_atual || null
 
-      // porte_empresa é objeto aninhado na v5
       const porte = item.porte_empresa?.descricao || item.porte_empresa?.codigo || null
 
       const endereco = item.endereco
       const municipio = endereco?.municipio || null
       const uf = endereco?.uf || null
+
+      // CNAE vem em atividade_principal (não cnae_fiscal)
+      const cnaeCodigo = item.atividade_principal?.codigo || null
+      const cnaeDescricao = item.atividade_principal?.descricao || null
+
+      // data_abertura vem como ISO datetime "2026-04-29T00:00:00Z" — pegar só a data
+      const dataAbertura = item.data_abertura ? item.data_abertura.slice(0, 10) : null
 
       return {
         nome_empresa: item.nome_fantasia || item.razao_social,
@@ -343,19 +317,19 @@ export async function POST(request: NextRequest) {
         email: extractEmail(item),
         endereco: buildEndereco(item),
         regiao: municipio ? `${municipio}${uf ? ` - ${uf.toUpperCase()}` : ""}` : uf?.toUpperCase() || null,
-        nicho: item.cnae_fiscal_descricao || null,
+        nicho: cnaeDescricao,
         situacao_cadastral: situacao,
         porte_empresa: porte,
         natureza_juridica: item.descricao_natureza_juridica || null,
-        cnae_principal: item.cnae_fiscal || null,
-        data_abertura: item.data_abertura || null,
+        cnae_principal: cnaeCodigo ? `${cnaeCodigo} — ${cnaeDescricao ?? ""}` : null,
+        data_abertura: dataAbertura,
         capital_social: item.capital_social ?? null,
         status: "novo_lead",
         origem: "casa_dos_dados",
         user_id: user.id,
         fonte_detalhes: {
           razao_social: item.razao_social,
-          cnae_descricao: item.cnae_fiscal_descricao || null,
+          cnae_descricao: cnaeDescricao,
           municipio,
           uf,
           cep: endereco?.cep || null,
@@ -467,8 +441,6 @@ export async function POST(request: NextRequest) {
         duplicatesSkipped > 0
           ? `${leads.length} novos contatos salvos (${creditsUsed} créditos usados). ${duplicatesSkipped} duplicados ignorados.`
           : `${leads.length} novos contatos salvos (${creditsUsed} créditos usados).`,
-      // DEBUG TEMPORÁRIO: retorna o primeiro item bruto para inspecionar os nomes dos campos
-      _debug_primeiro_item: empresas.length > 0 ? empresas[0] : null,
     })
   } catch (error) {
     console.error("[casa-dos-dados] Erro:", error)
