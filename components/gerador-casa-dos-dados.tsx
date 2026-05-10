@@ -432,12 +432,12 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
             {/* Matriz/Filial */}
             <div>
               <Label className="mb-2 block text-sm font-medium text-card-foreground">Matriz / Filial</Label>
-              <Select value={matrizFilial} onValueChange={setMatrizFilial} disabled={loading}>
+              <Select value={matrizFilial || "ambos"} onValueChange={(v) => setMatrizFilial(v === "ambos" ? "" : v)} disabled={loading}>
                 <SelectTrigger className="bg-secondary">
                   <SelectValue placeholder="Ambos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Ambos</SelectItem>
+                  <SelectItem value="ambos">Ambos</SelectItem>
                   <SelectItem value="MATRIZ">Somente Matriz</SelectItem>
                   <SelectItem value="FILIAL">Somente Filial</SelectItem>
                 </SelectContent>
