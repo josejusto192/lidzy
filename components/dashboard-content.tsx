@@ -23,9 +23,11 @@ import {
   Send,
   Filter,
 } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DatabaseSetupAlert } from "@/components/database-setup-alert"
 import { AlertDialogCustom } from "@/components/alert-dialog-custom"
 import { STATUS_LABELS, STATUS_COLORS, type StatusContato } from "@/lib/status-config"
+import { GeradorCasaDados } from "@/components/gerador-casa-dos-dados"
 
 interface Lead {
   id: string
@@ -575,105 +577,131 @@ export function DashboardContent() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-card-foreground">Nicho</label>
-              <Input
-                placeholder="Ex: Restaurantes, Clínicas"
-                value={nicho}
-                onChange={(e) => setNicho(e.target.value)}
-                className="bg-secondary"
-                disabled={loading}
-              />
-            </div>
+          <Tabs defaultValue="google">
+            <TabsList className="w-full mb-4">
+              <TabsTrigger value="google" className="flex-1 text-xs">
+                Google Maps
+              </TabsTrigger>
+              <TabsTrigger value="casadados" className="flex-1 text-xs">
+                Casa dos Dados (CNPJ)
+              </TabsTrigger>
+            </TabsList>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-card-foreground">Região</label>
-              <Input
-                placeholder="Ex: São Paulo, Rio de Janeiro"
-                value={regiao}
-                onChange={(e) => setRegiao(e.target.value)}
-                className="bg-secondary"
-                disabled={loading}
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-card-foreground">Páginas</label>
-              <div className="rounded-lg bg-secondary p-4 space-y-2">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">
-                    {paginas} {paginas === 1 ? "página" : "páginas"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">até {paginas * 10} resultados</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={paginas}
-                  onChange={(e) => setPaginas(Number.parseInt(e.target.value))}
+            {/* ── Aba Google Maps (método original) ── */}
+            <TabsContent value="google" className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-card-foreground">Nicho</label>
+                <Input
+                  placeholder="Ex: Restaurantes, Clínicas"
+                  value={nicho}
+                  onChange={(e) => setNicho(e.target.value)}
+                  className="bg-secondary"
                   disabled={loading}
-                  className="w-full accent-blue-500 disabled:opacity-50"
                 />
-                <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                  <span>1</span>
-                  <span>5</span>
-                  <span>10</span>
-                </div>
-                <div className="mt-3 pt-3 border-t border-border">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Estimativa de créditos:</span>
-                    <span className="font-semibold text-foreground">~{creditEstimate} créditos</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs mt-1">
-                    <span className="text-muted-foreground">Seu saldo:</span>
-                    <span className={currentCredits >= creditEstimate ? "text-green-500" : "text-red-500"}>
-                      {currentCredits} créditos
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-card-foreground">Região</label>
+                <Input
+                  placeholder="Ex: São Paulo, Rio de Janeiro"
+                  value={regiao}
+                  onChange={(e) => setRegiao(e.target.value)}
+                  className="bg-secondary"
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-card-foreground">Páginas</label>
+                <div className="rounded-lg bg-secondary p-4 space-y-2">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-sm font-medium text-foreground">
+                      {paginas} {paginas === 1 ? "página" : "páginas"}
                     </span>
+                    <span className="text-xs text-muted-foreground">até {paginas * 10} resultados</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={paginas}
+                    onChange={(e) => setPaginas(Number.parseInt(e.target.value))}
+                    disabled={loading}
+                    className="w-full accent-blue-500 disabled:opacity-50"
+                  />
+                  <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                    <span>1</span>
+                    <span>5</span>
+                    <span>10</span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Estimativa de créditos:</span>
+                      <span className="font-semibold text-foreground">~{creditEstimate} créditos</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs mt-1">
+                      <span className="text-muted-foreground">Seu saldo:</span>
+                      <span className={currentCredits >= creditEstimate ? "text-green-500" : "text-red-500"}>
+                        {currentCredits} créditos
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {error && (
-              <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-500">{error}</div>
-            )}
-
-            {generationResult && (
-              <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-green-500">Última Geração</h3>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <p className="text-muted-foreground">Contatos Adicionados</p>
-                    <p className="text-lg font-bold text-green-500">{generationResult.leadsAdded}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Créditos Gastos</p>
-                    <p className="text-lg font-bold text-green-500">{generationResult.creditsUsed}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Duplicados</p>
-                    <p className="text-lg font-bold text-orange-500">{generationResult.duplicatesSkipped}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleGerarLeads} disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Gerar Contatos
-                </>
+              {error && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-500">{error}</div>
               )}
-            </Button>
-          </div>
+
+              {generationResult && (
+                <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 space-y-2">
+                  <h3 className="text-sm font-semibold text-green-500">Última Geração</h3>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Contatos Adicionados</p>
+                      <p className="text-lg font-bold text-green-500">{generationResult.leadsAdded}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Créditos Gastos</p>
+                      <p className="text-lg font-bold text-green-500">{generationResult.creditsUsed}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Duplicados</p>
+                      <p className="text-lg font-bold text-orange-500">{generationResult.duplicatesSkipped}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleGerarLeads} disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Gerar Contatos
+                  </>
+                )}
+              </Button>
+            </TabsContent>
+
+            {/* ── Aba Casa dos Dados ── */}
+            <TabsContent value="casadados">
+              <GeradorCasaDados
+                currentCredits={currentCredits}
+                onLeadsGenerated={async () => {
+                  await loadLeads()
+                  await loadCredits()
+                }}
+                onAlert={({ type, title, message }) =>
+                  setAlertDialog({ open: true, type, title, message })
+                }
+              />
+            </TabsContent>
+          </Tabs>
         </Card>
       </div>
 
