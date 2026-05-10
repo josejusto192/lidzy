@@ -242,20 +242,23 @@ export async function POST(request: NextRequest) {
       endereco: buildEndereco(item),
       regiao: item.municipio ? `${item.municipio}${item.uf ? ` - ${item.uf}` : ""}` : item.uf || null,
       nicho: item.cnae_fiscal_descricao || null,
-      situacao_cadastral: item.situacao_cadastral || null,
-      porte_empresa: item.porte || null,
-      natureza_juridica: item.natureza_juridica || null,
-      cnae_principal: item.cnae_fiscal || null,
-      data_abertura: item.data_inicio_atividade || null,
-      capital_social: item.capital_social ?? null,
       status: "novo_lead",
       origem: "casa_dos_dados",
       user_id: user.id,
+      // Dados ricos da CDD armazenados no JSONB — funciona sem migration adicional.
+      // A migration 036 adiciona colunas dedicadas para filtros futuros (opcional).
       fonte_detalhes: {
-        cnae_descricao: item.cnae_fiscal_descricao,
-        municipio: item.municipio,
-        uf: item.uf,
-        cep: item.cep,
+        situacao_cadastral: item.situacao_cadastral || null,
+        porte_empresa: item.porte || null,
+        natureza_juridica: item.natureza_juridica || null,
+        cnae_principal: item.cnae_fiscal || null,
+        cnae_descricao: item.cnae_fiscal_descricao || null,
+        data_abertura: item.data_inicio_atividade || null,
+        capital_social: item.capital_social ?? null,
+        municipio: item.municipio || null,
+        uf: item.uf || null,
+        cep: item.cep || null,
+        razao_social: item.razao_social,
       },
     }))
 
@@ -347,8 +350,8 @@ export async function POST(request: NextRequest) {
       status: lead.status,
       endereco: lead.endereco,
       regiao: lead.regiao,
-      situacao_cadastral: lead.situacao_cadastral,
-      porte_empresa: lead.porte_empresa,
+      situacao_cadastral: (lead.fonte_detalhes as Record<string, string> | null)?.situacao_cadastral || null,
+      porte_empresa: (lead.fonte_detalhes as Record<string, string> | null)?.porte_empresa || null,
     }))
 
     return NextResponse.json({
