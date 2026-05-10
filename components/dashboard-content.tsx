@@ -33,13 +33,23 @@ interface Lead {
   id: string
   empresa: string
   telefone: string
-  nicho: string
+  email?: string
+  cnpj?: string
+  nicho?: string
   status: string
   endereco?: string
   regiao?: string
   website?: string
   rating?: number
   tags?: Array<{ id: string; nome: string; cor: string }>
+  // Campos da Receita Federal (Casa dos Dados)
+  situacao_cadastral?: string
+  porte_empresa?: string
+  natureza_juridica?: string
+  cnae_principal?: string
+  data_abertura?: string
+  capital_social?: number
+  origem?: string
 }
 
 interface Agent {
@@ -185,12 +195,21 @@ export function DashboardContent() {
         id: contato.id,
         empresa: contato.nome_empresa,
         telefone: contato.telefone || "Não disponível",
-        nicho: contato.nicho,
+        email: contato.email || undefined,
+        cnpj: contato.cnpj || undefined,
+        nicho: contato.nicho || undefined,
         status: contato.status,
-        endereco: contato.endereco,
-        regiao: contato.regiao,
-        website: contato.website,
+        endereco: contato.endereco || undefined,
+        regiao: contato.regiao || undefined,
+        website: contato.website || undefined,
         tags: contato.tags || [],
+        situacao_cadastral: contato.situacao_cadastral || undefined,
+        porte_empresa: contato.porte_empresa || undefined,
+        natureza_juridica: contato.natureza_juridica || undefined,
+        cnae_principal: contato.cnae_principal || undefined,
+        data_abertura: contato.data_abertura || undefined,
+        capital_social: contato.capital_social ?? undefined,
+        origem: contato.origem || undefined,
       }))
       setLeads(formattedLeads)
     } catch (err) {
@@ -833,16 +852,43 @@ export function DashboardContent() {
                 {filteredLeads.map((lead) => (
                   <tr key={lead.id} className="hover:bg-secondary/50 transition-colors">
                     <td className="py-3 md:py-4 px-2 md:px-4 text-sm font-medium text-foreground">
-                      <div className="max-w-[150px] md:max-w-none truncate">{lead.empresa}</div>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="max-w-[150px] md:max-w-none truncate">{lead.empresa}</div>
+                        {lead.cnpj && (
+                          <span className="text-xs text-muted-foreground font-mono">{lead.cnpj}</span>
+                        )}
+                        {lead.origem === "casa_dos_dados" && (
+                          <span className="text-[10px] text-blue-400 font-medium">Receita Federal</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 md:py-4 px-2 md:px-4 text-sm text-muted-foreground">
-                      <div className="max-w-[120px] md:max-w-none truncate">{lead.telefone}</div>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="max-w-[120px] md:max-w-none truncate">
+                          {lead.telefone !== "Não disponível" ? lead.telefone : <span className="text-xs italic">Sem telefone</span>}
+                        </div>
+                        {lead.email && (
+                          <span className="hidden md:block text-xs text-muted-foreground truncate max-w-[180px]">{lead.email}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="hidden md:table-cell py-3 md:py-4 px-2 md:px-4 text-sm text-muted-foreground">
-                      {lead.nicho}
+                      <div className="flex flex-col gap-0.5">
+                        <span className="truncate max-w-[140px]">{lead.nicho || "-"}</span>
+                        {lead.porte_empresa && (
+                          <span className="text-xs text-muted-foreground/70">{lead.porte_empresa}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="hidden lg:table-cell py-3 md:py-4 px-2 md:px-4 text-sm text-muted-foreground">
-                      {lead.regiao || "-"}
+                      <div className="flex flex-col gap-0.5">
+                        <span>{lead.regiao || "-"}</span>
+                        {lead.situacao_cadastral && (
+                          <span className={`text-xs font-medium ${lead.situacao_cadastral === "ATIVA" ? "text-green-500" : "text-red-400"}`}>
+                            {lead.situacao_cadastral}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="hidden xl:table-cell py-3 md:py-4 px-2 md:px-4 text-sm text-muted-foreground">
                       {lead.website ? (
@@ -952,7 +998,8 @@ export function DashboardContent() {
           </DialogHeader>
 
           {selectedLead && (
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              {/* Dados de contato */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Empresa</label>
@@ -966,6 +1013,13 @@ export function DashboardContent() {
                   )}
                 </div>
 
+                {selectedLead.cnpj && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">CNPJ</label>
+                    <p className="text-sm text-foreground font-mono">{selectedLead.cnpj}</p>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Telefone</label>
                   {isEditingLead ? (
@@ -974,19 +1028,26 @@ export function DashboardContent() {
                       onChange={(e) => setEditLeadForm({ ...editLeadForm, telefone: e.target.value })}
                     />
                   ) : (
-                    <p className="text-sm text-foreground">{selectedLead.telefone}</p>
+                    <p className="text-sm text-foreground">{selectedLead.telefone !== "Não disponível" ? selectedLead.telefone : <span className="text-muted-foreground italic">Não disponível</span>}</p>
                   )}
                 </div>
 
+                {selectedLead.email && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">E-mail</label>
+                    <p className="text-sm text-foreground break-all">{selectedLead.email}</p>
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Nicho</label>
+                  <label className="text-sm font-medium text-muted-foreground">Nicho / Atividade</label>
                   {isEditingLead ? (
                     <Input
                       value={editLeadForm.nicho}
                       onChange={(e) => setEditLeadForm({ ...editLeadForm, nicho: e.target.value })}
                     />
                   ) : (
-                    <p className="text-sm text-foreground">{selectedLead.nicho}</p>
+                    <p className="text-sm text-foreground">{selectedLead.nicho || "Não informado"}</p>
                   )}
                 </div>
 
@@ -1003,7 +1064,7 @@ export function DashboardContent() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Status</label>
+                  <label className="text-sm font-medium text-muted-foreground">Status do Lead</label>
                   <span
                     className={`inline-flex rounded-full px-2 md:px-3 py-1 text-xs font-medium ${
                       selectedLead.status === "mensagem enviada"
@@ -1050,6 +1111,59 @@ export function DashboardContent() {
                   ) : (
                     <p className="text-sm text-foreground">{selectedLead.endereco}</p>
                   )}
+                </div>
+              )}
+
+              {/* Dados da Receita Federal — exibe quando origem é Casa dos Dados */}
+              {(selectedLead.situacao_cadastral || selectedLead.porte_empresa || selectedLead.natureza_juridica || selectedLead.cnae_principal || selectedLead.data_abertura || selectedLead.capital_social) && (
+                <div className="rounded-lg border border-border p-4 space-y-3">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Dados da Receita Federal
+                  </h4>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {selectedLead.situacao_cadastral && (
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Situação Cadastral</label>
+                        <p className={`text-sm font-medium ${selectedLead.situacao_cadastral === "ATIVA" ? "text-green-500" : "text-red-400"}`}>
+                          {selectedLead.situacao_cadastral}
+                        </p>
+                      </div>
+                    )}
+                    {selectedLead.porte_empresa && (
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Porte</label>
+                        <p className="text-sm text-foreground">{selectedLead.porte_empresa}</p>
+                      </div>
+                    )}
+                    {selectedLead.natureza_juridica && (
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-xs text-muted-foreground">Natureza Jurídica</label>
+                        <p className="text-sm text-foreground">{selectedLead.natureza_juridica}</p>
+                      </div>
+                    )}
+                    {selectedLead.cnae_principal && (
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-xs text-muted-foreground">CNAE Principal</label>
+                        <p className="text-sm text-foreground font-mono">{selectedLead.cnae_principal}</p>
+                      </div>
+                    )}
+                    {selectedLead.data_abertura && (
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Data de Abertura</label>
+                        <p className="text-sm text-foreground">
+                          {new Date(selectedLead.data_abertura).toLocaleDateString("pt-BR")}
+                        </p>
+                      </div>
+                    )}
+                    {selectedLead.capital_social != null && (
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Capital Social</label>
+                        <p className="text-sm text-foreground">
+                          {selectedLead.capital_social.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
