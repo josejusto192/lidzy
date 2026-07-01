@@ -30,6 +30,7 @@ import { STATUS_LABELS, STATUS_COLORS, type StatusContato } from "@/lib/status-c
 import { GeradorCasaDados } from "@/components/gerador-casa-dos-dados"
 import { ExportMenu } from "@/components/export-menu"
 import { NovoContatoManual } from "@/components/novo-contato-manual"
+import { InfoTooltip } from "@/components/info-tooltip"
 
 interface Lead {
   id: string
@@ -597,7 +598,10 @@ export function DashboardContent() {
             {/* ── Aba Google Maps (método original) ── */}
             <TabsContent value="google" className="space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-card-foreground">Nicho</label>
+                <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-card-foreground">
+                  Nicho
+                  <InfoTooltip text="Digite o segmento de mercado que deseja prospectar. Ex: Clínicas Odontológicas, Academias, Restaurantes. Quanto mais específico, mais relevantes serão os resultados." />
+                </label>
                 <Input
                   placeholder="Ex: Restaurantes, Clínicas"
                   value={nicho}
@@ -608,7 +612,10 @@ export function DashboardContent() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-card-foreground">Região</label>
+                <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-card-foreground">
+                  Região
+                  <InfoTooltip text="Digite a cidade ou estado onde quer buscar. Ex: São Paulo SP, Campinas SP, Rio de Janeiro. Você pode combinar cidade + estado para mais precisão." />
+                </label>
                 <Input
                   placeholder="Ex: São Paulo, Rio de Janeiro"
                   value={regiao}
@@ -619,7 +626,10 @@ export function DashboardContent() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-card-foreground">Páginas</label>
+                <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-card-foreground">
+                  Páginas
+                  <InfoTooltip text="Cada página retorna até 10 resultados do Google Maps. Mais páginas = mais leads, mas também mais créditos consumidos. Os créditos só são descontados após salvar os leads." />
+                </label>
                 <div className="rounded-lg bg-secondary p-4 space-y-2">
                   <div className="mb-3 flex items-center justify-between">
                     <span className="text-sm font-medium text-foreground">

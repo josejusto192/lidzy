@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { InfoTooltip } from "@/components/info-tooltip"
 import { toast } from "sonner"
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -134,8 +135,13 @@ function sitColor(s?: string) {
 
 // ── UI atoms ──────────────────────────────────────────────────────────────────
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5 pb-1.5 border-b border-border">{children}</div>
+function SectionTitle({ children, tooltip }: { children: React.ReactNode; tooltip?: string }) {
+  return (
+    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5 pb-1.5 border-b border-border flex items-center gap-1.5">
+      {children}
+      {tooltip && <InfoTooltip text={tooltip} side="right" />}
+    </div>
+  )
 }
 
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
@@ -374,7 +380,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert, ex
 
         {/* Localização */}
         <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-          <SectionTitle>Localização</SectionTitle>
+          <SectionTitle tooltip="Filtre por estado e município. Selecione um ou mais estados para habilitar a busca por município. O DDD filtra empresas com telefone daquele código de área.">Localização</SectionTitle>
           <div>
             <p className="text-xs font-medium text-card-foreground mb-1.5">Estado (UF)</p>
             <div className="flex flex-wrap gap-1">
@@ -406,7 +412,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert, ex
 
         {/* Busca textual */}
         <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-2">
-          <SectionTitle>Busca Textual</SectionTitle>
+          <SectionTitle tooltip="Busca pelo nome da empresa na base da Receita Federal. 'Radical' encontra variações da palavra (ex: 'constru' encontra construtora, construção). 'Exata' exige a palavra completa.">Busca Textual</SectionTitle>
           <Input value={form.termo} onChange={(e) => set("termo", e.target.value)}
             placeholder="Ex: restaurante, clínica, construtora..." className="bg-secondary text-sm h-8" />
           <div className="flex gap-2">
@@ -417,7 +423,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert, ex
 
         {/* CNAE */}
         <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-2">
-          <SectionTitle>Atividade (CNAE)</SectionTitle>
+          <SectionTitle tooltip="CNAE é o código de atividade econômica da empresa na Receita Federal. Ex: 6201-5/01 = Desenvolvimento de programas de computador. Você pode selecionar múltiplos CNAEs. Ative 'incluir secundários' para pegar empresas que exercem essa atividade como secundária também.">Atividade (CNAE)</SectionTitle>
           <CnaePicker value={form.cnaes} onChange={(v) => set("cnaes", v)} />
           {form.cnaes.length > 0 && (
             <Toggle label="Incluir CNAEs secundários" value={form.incluir_secundaria} onChange={(v) => set("incluir_secundaria", v)} />
@@ -426,7 +432,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert, ex
 
         {/* Empresa */}
         <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-          <SectionTitle>Empresa</SectionTitle>
+          <SectionTitle tooltip="Filtre por características da empresa. 'Ativa' é o mais comum para prospecção. Natureza jurídica aceita código numérico (ex: 2062 = Sociedade Limitada). Capital social filtra pelo valor declarado na Receita.">Empresa</SectionTitle>
           <div>
             <p className="text-xs font-medium text-card-foreground mb-1.5">Situação</p>
             <div className="flex flex-wrap gap-1">
@@ -474,7 +480,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert, ex
 
         {/* Filtros adicionais */}
         <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-          <SectionTitle>Filtros Adicionais</SectionTitle>
+          <SectionTitle tooltip="Filtros de qualidade dos leads. 'Excluir e-mail contab.' remove endereços genéricos de escritórios contábeis (ex: contato@escritoriocontabil.com). MEI e Simples filtram pelo regime tributário da empresa.">Filtros Adicionais</SectionTitle>
           <div className="grid grid-cols-2 gap-x-6 gap-y-2">
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground">Contato</p>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { DashboardContent } from "@/components/dashboard-content"
+import { OnboardingModal } from "@/components/onboarding-modal"
 import { createClient } from "@/lib/supabase/client"
 
 export default function ContatosPage() {
@@ -46,6 +47,7 @@ export default function ContatosPage() {
       <div className="flex flex-1 flex-col pt-16 lg:pl-52 lg:pt-0">
         <Header title="Contatos" />
         <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+          <OnboardingModal />
           <DashboardContent />
         </main>
       </div>

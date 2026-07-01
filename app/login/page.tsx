@@ -47,6 +47,18 @@ export default function LoginPage() {
 
       if (data.user) {
         console.log("[v0] Login bem-sucedido, redirecionando...")
+        // Aplicar código de indicação salvo no signup (se houver)
+        const refCode = localStorage.getItem("lidzy_ref_code")
+        if (refCode) {
+          try {
+            await fetch("/api/referrals/apply", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ codigo_referencia: refCode }),
+            })
+          } catch {}
+          localStorage.removeItem("lidzy_ref_code")
+        }
         window.location.href = "/"
       } else {
         console.error("[v0] Login sem usuário retornado")
