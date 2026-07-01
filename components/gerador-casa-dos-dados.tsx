@@ -1,741 +1,612 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Search, ChevronDown, ChevronUp, X, Check } from "lucide-react"
-import { searchCnaes, type Cnae } from "@/lib/cnaes"
+import { toast } from "sonner"
 
-const UF_OPTIONS = [
-  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
-  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+// ── Constantes ────────────────────────────────────────────────────────────────
+
+const UF_LIST = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"]
+const SITUACOES = ["ATIVA","INAPTA","BAIXADA","SUSPENSA","NULA"]
+const PORTES = [
+  { value: "01", label: "ME" },
+  { value: "03", label: "EPP" },
+  { value: "05", label: "Demais" },
 ]
 
-// ── Combobox de CNAE ────────────────────────────────────────────────────────
+function stripCnae(c: string) { return (c || "").replace(/[-/]/g, "") }
 
-function CnaeCombobox({
-  value,
-  onChange,
-  placeholder = "Buscar CNAE...",
-  disabled,
+// ── CNAE lazy-load do IBGE ───────────────────────────────────────────────────
+
+interface CnaeItem { codigo: string; descricao: string }
+let cnaeCache: CnaeItem[] | null = null
+let cnaePromise: Promise<CnaeItem[]> | null = null
+
+async function loadCnaes(): Promise<CnaeItem[]> {
+  if (cnaeCache) return cnaeCache
+  if (cnaePromise) return cnaePromise
+  cnaePromise = fetch("https://servicodados.ibge.gov.br/api/v2/cnae/subclasses")
+    .then((r) => r.json())
+    .then((data: { id: string; descricao: string }[]) => {
+      cnaeCache = data.map((c) => ({ codigo: c.id, descricao: c.descricao }))
+      return cnaeCache!
+    })
+    .catch(() => { cnaeCache = []; return [] })
+  return cnaePromise
+}
+
+// ── Municípios lazy-load do IBGE ─────────────────────────────────────────────
+
+const muniCache: Record<string, string[]> = {}
+
+async function loadMunicipios(ufs: string[]): Promise<string[]> {
+  const toFetch = ufs.filter((uf) => !muniCache[uf])
+  await Promise.all(toFetch.map((uf) =>
+    fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`)
+      .then((r) => r.json())
+      .then((data: { nome: string }[]) => { muniCache[uf] = data.map((m) => m.nome) })
+      .catch(() => { muniCache[uf] = [] })
+  ))
+  return [...new Set(ufs.flatMap((uf) => muniCache[uf] || []))].sort((a, b) => a.localeCompare(b, "pt"))
+}
+
+// ── Form state ────────────────────────────────────────────────────────────────
+
+const EMPTY_FORM = {
+  termo: "", tipo_busca: "radical",
+  ufs: [] as string[], municipios: [] as string[], bairro: "", cep: "", ddd: "",
+  cnaes: [] as CnaeItem[], incluir_secundaria: false, natureza_juridica: "",
+  situacoes: ["ATIVA"] as string[], portes: [] as string[],
+  abertura_de: "", abertura_ate: "",
+  capital_min: "", capital_max: "",
+  somente_mei: false, excluir_mei: false,
+  simples_optante: false, simples_excluir: false,
+  com_email: false, com_telefone: true,
+  somente_celular: false, somente_fixo: false, somente_matriz: false, somente_filial: false,
+  excluir_email_contab: false,
+}
+
+function buildBody(form: typeof EMPTY_FORM, page: number) {
+  const body: Record<string, unknown> = { limite: 20, pagina: page }
+  if (form.termo.trim()) {
+    body.busca_textual = [{ texto: [form.termo.trim()], tipo_busca: form.tipo_busca, razao_social: true, nome_fantasia: true, nome_socio: false }]
+  }
+  if (form.ufs.length)        body.uf        = form.ufs.map((u) => u.toLowerCase())
+  if (form.municipios.length) body.municipio  = form.municipios.map((m) => m.toLowerCase())
+  if (form.bairro.trim())     body.bairro     = [form.bairro.trim().toLowerCase()]
+  if (form.cep.trim())        body.cep        = [form.cep.replace(/\D/g, "")]
+  if (form.ddd.trim())        body.ddd        = [form.ddd.trim()]
+  if (form.cnaes.length) {
+    body.codigo_atividade_principal = form.cnaes.map((c) => stripCnae(c.codigo))
+    if (form.incluir_secundaria) {
+      body.incluir_atividade_secundaria = true
+      body.codigo_atividade_secundaria  = form.cnaes.map((c) => stripCnae(c.codigo))
+    }
+  }
+  if (form.natureza_juridica.trim()) body.codigo_natureza_juridica = form.natureza_juridica.split(",").map((c) => c.trim()).filter(Boolean)
+  if (form.situacoes.length)  body.situacao_cadastral = form.situacoes
+  if (form.somente_matriz)    body.matriz_filial = "MATRIZ"
+  else if (form.somente_filial) body.matriz_filial = "FILIAL"
+  if (form.portes.length)     body.porte_empresa = { codigos: form.portes }
+  if (form.abertura_de || form.abertura_ate) {
+    body.data_abertura = {
+      ...(form.abertura_de && { inicio: form.abertura_de }),
+      ...(form.abertura_ate && { fim: form.abertura_ate }),
+    }
+  }
+  if (form.capital_min !== "" || form.capital_max !== "") {
+    body.capital_social = {
+      ...(form.capital_min !== "" && { minimo: Number(form.capital_min) }),
+      ...(form.capital_max !== "" && { maximo: Number(form.capital_max) }),
+    }
+  }
+  if (form.somente_mei || form.excluir_mei)         body.mei     = { optante: form.somente_mei,     excluir_optante: form.excluir_mei }
+  if (form.simples_optante || form.simples_excluir) body.simples = { optante: form.simples_optante, excluir_optante: form.simples_excluir }
+  const mf: Record<string, boolean> = {}
+  if (form.com_email)            mf.com_email            = true
+  if (form.com_telefone)         mf.com_telefone         = true
+  if (form.somente_celular)      mf.somente_celular      = true
+  if (form.somente_fixo)         mf.somente_fixo         = true
+  if (form.excluir_email_contab) mf.excluir_email_contab = true
+  if (Object.keys(mf).length)   body.mais_filtros        = mf
+  return body
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatCNPJ(raw: string) {
+  const d = (raw || "").replace(/\D/g, "")
+  if (d.length !== 14) return raw || ""
+  return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`
+}
+function formatDate(d?: string) {
+  if (!d) return "—"
+  const p = d.slice(0, 10).split("-")
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : d
+}
+function sitColor(s?: string) {
+  if (s === "ATIVA")   return "text-green-500"
+  if (s === "BAIXADA") return "text-red-500"
+  if (s === "INAPTA")  return "text-yellow-500"
+  return "text-muted-foreground"
+}
+
+// ── UI atoms ──────────────────────────────────────────────────────────────────
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5 pb-1.5 border-b border-border">{children}</div>
+}
+
+function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none">
+      <div onClick={() => onChange(!value)} className={`w-8 h-4 rounded-full relative transition-colors cursor-pointer shrink-0 ${value ? "bg-green-500" : "bg-secondary"}`}>
+        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${value ? "left-4" : "left-0.5"}`} />
+      </div>
+      <span className={`text-xs ${value ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
+    </label>
+  )
+}
+
+function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`px-2 py-0.5 rounded text-[11px] border transition-colors cursor-pointer ${active ? "bg-green-500 border-green-500 text-white font-semibold" : "bg-secondary border-border text-muted-foreground hover:border-green-500/50"}`}>
+      {label}
+    </button>
+  )
+}
+
+// ── MultiPicker ───────────────────────────────────────────────────────────────
+
+function MultiPicker<T>({
+  value, onChange, items, loading, placeholder,
+  getKey, getLabel, tagLabel,
 }: {
-  value: Cnae | null
-  onChange: (cnae: Cnae | null) => void
-  placeholder?: string
-  disabled?: boolean
+  value: T[]; onChange: (v: T[]) => void; items: T[]; loading?: boolean;
+  placeholder: string; getKey: (c: T) => string; getLabel: (c: T) => string; tagLabel?: (c: T) => string
 }) {
-  const [query, setQuery] = useState("")
-  const [open, setOpen] = useState(false)
-  const results = searchCnaes(query)
+  const [search, setSearch] = useState("")
+  const [open, setOpen]     = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
+    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h)
   }, [])
+
+  const q = search.trim().toLowerCase()
+  const filtered = (q ? items.filter((c) => getKey(c).toLowerCase().includes(q) || getLabel(c).toLowerCase().includes(q)) : items).slice(0, 80)
+
+  function toggle(item: T) {
+    const k = getKey(item)
+    const exists = value.find((c) => getKey(c) === k)
+    onChange(exists ? value.filter((c) => getKey(c) !== k) : [...value, item])
+  }
 
   return (
     <div ref={ref} className="relative">
-      <div className="flex items-center gap-2 rounded-md border border-input bg-secondary px-3 py-2">
-        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <input
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
-          placeholder={value ? `${value.codigo} — ${value.descricao}` : placeholder}
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
-          disabled={disabled}
-        />
-        {value && (
-          <button
-            type="button"
-            onClick={() => { onChange(null); setQuery("") }}
-            className="text-muted-foreground hover:text-foreground"
-            disabled={disabled}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-
-      {open && query.length >= 2 && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-lg">
-          {results.length === 0 ? (
-            <p className="p-3 text-center text-sm text-muted-foreground">Nenhum CNAE encontrado.</p>
-          ) : (
-            <ul className="max-h-60 overflow-y-auto py-1">
-              {results.map((cnae) => (
-                <li key={cnae.codigo}>
-                  <button
-                    type="button"
-                    className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
-                    onClick={() => { onChange(cnae); setQuery(""); setOpen(false) }}
-                  >
-                    {value?.codigo === cnae.codigo && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
-                    <span className={value?.codigo === cnae.codigo ? "ml-0" : "ml-5"}>
-                      <span className="font-mono text-xs text-muted-foreground">{cnae.codigo}</span>
-                      <span className="mx-1.5 text-muted-foreground">—</span>
-                      <span>{cnae.descricao}</span>
-                      <span className="ml-2 text-xs text-muted-foreground/60">({cnae.secao})</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1.5">
+          {value.map((c) => (
+            <span key={getKey(c)} className="flex items-center gap-1 bg-green-500/10 text-green-500 rounded px-2 py-0.5 text-[11px] font-semibold">
+              {tagLabel ? tagLabel(c) : getLabel(c)}
+              <span onClick={() => onChange(value.filter((x) => getKey(x) !== getKey(c)))} className="cursor-pointer text-muted-foreground hover:text-foreground leading-none text-sm">×</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <Input
+        value={search}
+        onChange={(e) => { setSearch(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder={loading ? "Carregando..." : placeholder}
+        disabled={loading}
+        className="bg-secondary text-sm h-8"
+      />
+      {open && !loading && (
+        <div className="absolute top-full left-0 right-0 z-50 bg-popover border border-border rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+          {filtered.length === 0 && <div className="p-3 text-xs text-muted-foreground text-center">Nenhum resultado</div>}
+          {filtered.map((c) => {
+            const sel = !!value.find((x) => getKey(x) === getKey(c))
+            return (
+              <div key={getKey(c)} onClick={() => toggle(c)}
+                className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs border-b border-border/50 hover:bg-accent ${sel ? "bg-green-500/5" : ""}`}>
+                <div className={`w-3.5 h-3.5 rounded shrink-0 border-2 flex items-center justify-center ${sel ? "border-green-500 bg-green-500" : "border-muted-foreground"}`}>
+                  {sel && <span className="text-white text-[8px] font-bold">✓</span>}
+                </div>
+                <span className="font-mono text-green-500 shrink-0 min-w-[60px]">{getKey(c)}</span>
+                <span className="text-foreground leading-tight">{getLabel(c)}</span>
+              </div>
+            )
+          })}
+          {!q && items.length > 80 && <div className="p-2 text-[11px] text-muted-foreground text-center">Digite para filtrar {items.length} opções</div>}
         </div>
       )}
     </div>
   )
 }
 
-// ── Opções fixas ─────────────────────────────────────────────────────────────
+function CnaePicker({ value, onChange }: { value: CnaeItem[]; onChange: (v: CnaeItem[]) => void }) {
+  const [cnaes, setCnaes] = useState<CnaeItem[]>([])
+  const [loading, setLoading] = useState(false)
+  useEffect(() => {
+    if (cnaeCache) { setCnaes(cnaeCache); return }
+    setLoading(true)
+    loadCnaes().then((data) => { setCnaes(data); setLoading(false) })
+  }, [])
+  return <MultiPicker value={value} onChange={onChange} items={cnaes} loading={loading} placeholder="Buscar por código ou descrição..." getKey={(c) => c.codigo} getLabel={(c) => c.descricao} tagLabel={(c) => c.codigo} />
+}
 
-const SITUACAO_OPTIONS = [
-  { value: "ATIVA", label: "Ativa" },
-  { value: "INAPTA", label: "Inapta" },
-  { value: "BAIXADA", label: "Baixada" },
-  { value: "SUSPENSA", label: "Suspensa" },
-  { value: "NULA", label: "Nula" },
-]
+function MunicipioPicker({ ufs, value, onChange }: { ufs: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  const [items, setItems] = useState<{ nome: string }[]>([])
+  const [loading, setLoading] = useState(false)
+  const ufsKey = ufs.join(",")
+  useEffect(() => {
+    if (!ufs.length) { setItems([]); onChange([]); return }
+    setLoading(true)
+    loadMunicipios(ufs).then((names) => {
+      setItems(names.map((n) => ({ nome: n })))
+      onChange(value.filter((v) => names.includes(v)))
+      setLoading(false)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ufsKey])
+  if (!ufs.length) return <p className="text-xs text-muted-foreground py-1">Selecione um estado primeiro</p>
+  return (
+    <MultiPicker
+      value={value.map((n) => ({ nome: n }))}
+      onChange={(v) => onChange(v.map((x) => x.nome))}
+      items={items} loading={loading} placeholder="Buscar município..."
+      getKey={(c) => c.nome} getLabel={(c) => c.nome}
+    />
+  )
+}
 
-const PORTE_OPTIONS = [
-  { value: "00", label: "Não informado" },
-  { value: "01", label: "Micro Empresa (ME)" },
-  { value: "03", label: "Empresa de Pequeno Porte (EPP)" },
-  { value: "05", label: "Demais" },
-]
+// ── Props / component ─────────────────────────────────────────────────────────
 
 interface GeradorCasaDadosProps {
   currentCredits: number
   onLeadsGenerated: () => void
   onAlert: (alert: { type: "success" | "error" | "warning" | "info"; title: string; message: string }) => void
+  existingCnpjs?: string[]
 }
 
-interface GenerationResult {
-  leadsAdded: number
-  creditsUsed: number
-  duplicatesSkipped: number
-  totalEncontrado: number
-}
+type CddItem = Record<string, unknown>
 
-export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: GeradorCasaDadosProps) {
+export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert, existingCnpjs = [] }: GeradorCasaDadosProps) {
+  const [form, setForm]       = useState(EMPTY_FORM)
+  const [results, setResults] = useState<CddItem[]>([])
+  const [total, setTotal]     = useState(0)
+  const [page, setPage]       = useState(1)
   const [loading, setLoading] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null)
+  const [error, setError]     = useState("")
+  const [saved, setSaved]     = useState<Record<string, boolean>>({})
+  const [saving, setSaving]   = useState<Record<string, boolean>>({})
+  const [savingAll, setSavingAll]     = useState(false)
+  const [saveAllProgress, setSaveAllProgress] = useState<{ done: number; total: number } | null>(null)
+  const cancelRef = useRef(false)
 
-  // Filtros básicos
-  const [ufs, setUfs] = useState<string[]>([])
-  const [municipio, setMunicipio] = useState("")
-  const [cnaePrincipal, setCnaePrincipal] = useState<Cnae | null>(null)
-  const [situacaoCadastral, setSituacaoCadastral] = useState<string[]>(["ATIVA"])
-  const [limite, setLimite] = useState(100)
-  const [buscaTextual, setBuscaTextual] = useState("")
-
-  // Filtros avançados
-  const [porte, setPorte] = useState<string[]>([])
-  const [matrizFilial, setMatrizFilial] = useState("")
-  const [ddd, setDdd] = useState("")
-  const [dataAberturaInicio, setDataAberturaInicio] = useState("")
-  const [dataAberturaFim, setDataAberturaFim] = useState("")
-  const [capitalMin, setCapitalMin] = useState("")
-  const [capitalMax, setCapitalMax] = useState("")
-  const [cnaeSecundario, setCnaeSecundario] = useState<Cnae | null>(null)
-  const [naturezaJuridica, setNaturezaJuridica] = useState("")
-
-  // Filtros de qualificação
-  const [comTelefone, setComTelefone] = useState(true)
-  const [comEmail, setComEmail] = useState(false)
-  const [somenteCelular, setSomenteCelular] = useState(false)
-  const [somenteFixo, setSomenteFixo] = useState(false)
-  const [excluirEmailContab, setExcluirEmailContab] = useState(false)
-  const [meiOptante, setMeiOptante] = useState<boolean | undefined>(undefined)
-  const [simplesOptante, setSimplesOptante] = useState<boolean | undefined>(undefined)
-
-  const creditEstimate = limite
-
-  const toggleUf = (uf: string) => {
-    setUfs((prev) => (prev.includes(uf) ? prev.filter((u) => u !== uf) : [...prev, uf]))
+  function set<K extends keyof typeof EMPTY_FORM>(field: K, value: (typeof EMPTY_FORM)[K]) {
+    setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  const toggleSituacao = (value: string) => {
-    setSituacaoCadastral((prev) =>
-      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
-    )
+  const inDb = useCallback((cnpj: string) => existingCnpjs.includes((cnpj || "").replace(/\D/g, "")), [existingCnpjs])
+
+  async function fetchPage(p: number, formArg = form) {
+    const res = await fetch("/api/gerar-leads/casa-dos-dados/buscar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildBody(formArg, p)),
+    })
+    if (!res.ok) { const t = await res.json(); throw new Error(t.error || `Erro ${res.status}`) }
+    const json = await res.json()
+    return { cnpjs: (json?.cnpjs || []) as CddItem[], total: (json?.total || 0) as number }
   }
 
-  const togglePorte = (value: string) => {
-    setPorte((prev) => (prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value]))
-  }
-
-  const buildFiltros = () => {
-    const filtros: Record<string, unknown> = { limite }
-
-    if (ufs.length) filtros.uf = ufs
-    if (municipio.trim()) filtros.municipio = [municipio.trim()]
-    if (cnaePrincipal) filtros.codigo_atividade_principal = [cnaePrincipal.codigo]
-    if (situacaoCadastral.length) filtros.situacao_cadastral = situacaoCadastral
-    if (buscaTextual.trim()) filtros.busca_textual = buscaTextual.trim()
-
-    if (porte.length) filtros.porte_empresa = porte
-    if (matrizFilial) filtros.matriz_filial = matrizFilial
-    if (ddd.trim()) filtros.ddd = ddd.split(",").map((d) => d.trim()).filter(Boolean)
-    if (dataAberturaInicio) filtros.data_abertura_inicio = dataAberturaInicio
-    if (dataAberturaFim) filtros.data_abertura_fim = dataAberturaFim
-    if (capitalMin) filtros.capital_social_minimo = Number(capitalMin)
-    if (capitalMax) filtros.capital_social_maximo = Number(capitalMax)
-    if (cnaeSecundario) filtros.codigo_atividade_secundaria = [cnaeSecundario.codigo]
-    if (naturezaJuridica.trim()) filtros.codigo_natureza_juridica = [naturezaJuridica.trim()]
-
-    filtros.com_telefone = comTelefone
-    if (comEmail) filtros.com_email = true
-    if (somenteCelular) filtros.somente_celular = true
-    if (somenteFixo) filtros.somente_fixo = true
-    if (excluirEmailContab) filtros.excluir_email_contab = true
-    if (meiOptante !== undefined) filtros.mei_optante = meiOptante
-    if (simplesOptante !== undefined) filtros.simples_optante = simplesOptante
-
-    return filtros
-  }
-
-  const handleGerar = () => {
-    setShowConfirmation(true)
-  }
-
-  const confirmAndGenerate = async () => {
-    setShowConfirmation(false)
-    setLoading(true)
-    setGenerationResult(null)
-
+  async function search(p = 1) {
+    setLoading(true); setError(""); setPage(p)
     try {
-      const response = await fetch("/api/gerar-leads/casa-dos-dados", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildFiltros()),
-      })
+      const { cnpjs, total: t } = await fetchPage(p)
+      setResults(cnpjs); setTotal(t)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro ao consultar a API"
+      setError(msg); setResults([]); setTotal(0)
+    } finally { setLoading(false) }
+  }
 
-      const data = await response.json()
+  async function saveItems(items: CddItem[]) {
+    const res = await fetch("/api/gerar-leads/casa-dos-dados/salvar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error || "Erro ao salvar")
+    return json as { saved: number; duplicatesSkipped: number; creditsUsed: number }
+  }
 
-      if (response.status === 503 && data.error === "CASA_DOS_DADOS_NOT_CONFIGURED") {
-        onAlert({
-          type: "error",
-          title: "API não configurada",
-          message: "A chave da API da Casa dos Dados não está configurada no servidor.",
-        })
-        return
-      }
-
-      if (!response.ok) {
-        if (data.error === "INSUFFICIENT_CREDITS") {
-          onAlert({ type: "warning", title: "Créditos Insuficientes", message: data.message })
-        } else {
-          onAlert({ type: "error", title: "Erro", message: data.message || data.error || "Erro ao gerar leads." })
-        }
-        return
-      }
-
-      setGenerationResult({
-        leadsAdded: data.total || 0,
-        creditsUsed: data.creditsUsed || 0,
-        duplicatesSkipped: data.duplicatesSkipped || 0,
-        totalEncontrado: data.totalEncontrado || 0,
-      })
-
+  async function saveOne(item: CddItem) {
+    const key = item.cnpj as string
+    setSaving((prev) => ({ ...prev, [key]: true }))
+    try {
+      await saveItems([item])
+      setSaved((prev) => ({ ...prev, [key]: true }))
       onLeadsGenerated()
-
-      onAlert({
-        type: "success",
-        title: "Contatos Gerados!",
-        message: data.message,
-      })
-    } catch {
-      onAlert({ type: "error", title: "Erro", message: "Não foi possível conectar ao servidor." })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar")
     } finally {
-      setLoading(false)
+      setSaving((prev) => ({ ...prev, [key]: false }))
     }
   }
 
+  async function saveAll() {
+    const totalPages = Math.ceil(total / 20)
+    cancelRef.current = false; setSavingAll(true); setSaveAllProgress({ done: 0, total })
+    try {
+      for (let p = 1; p <= totalPages; p++) {
+        if (cancelRef.current) break
+        const items = p === page ? results : (await fetchPage(p)).cnpjs
+        const toSave = items.filter((item) => {
+          const cnpj = item.cnpj as string
+          return !inDb(cnpj) && !saved[cnpj]
+        })
+        if (toSave.length) {
+          const r = await saveItems(toSave)
+          toSave.forEach((item) => setSaved((prev) => ({ ...prev, [item.cnpj as string]: true })))
+          if (r.creditsUsed > 0) onLeadsGenerated()
+        }
+        setSaveAllProgress((prev) => prev ? { ...prev, done: prev.done + items.length } : null)
+      }
+      toast.success("Importação concluída!")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar")
+    } finally { cancelRef.current = false; setSavingAll(false); setSaveAllProgress(null) }
+  }
+
+  const totalPages = Math.ceil(total / 20) || 0
+
   return (
-    <div className="space-y-5">
-      {/* Busca textual */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium text-card-foreground">
-          Razão Social / Nome Fantasia
-        </Label>
-        <Input
-          placeholder="Ex: Construtora Silva"
-          value={buscaTextual}
-          onChange={(e) => setBuscaTextual(e.target.value)}
-          className="bg-secondary"
-          disabled={loading}
-        />
-      </div>
+    <div className="space-y-4">
+      <form onSubmit={(e) => { e.preventDefault(); search(1) }} className="space-y-4">
 
-      {/* UF */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium text-card-foreground">Estado (UF)</Label>
-        <div className="flex flex-wrap gap-1.5">
-          {UF_OPTIONS.map((uf) => (
-            <button
-              key={uf}
-              type="button"
-              onClick={() => toggleUf(uf)}
-              disabled={loading}
-              className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-                ufs.includes(uf)
-                  ? "bg-blue-600 text-white"
-                  : "bg-secondary text-muted-foreground hover:bg-secondary/80"
-              }`}
-            >
-              {uf}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Município */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium text-card-foreground">Município</Label>
-        <Input
-          placeholder="Ex: São Paulo"
-          value={municipio}
-          onChange={(e) => setMunicipio(e.target.value)}
-          className="bg-secondary"
-          disabled={loading}
-        />
-      </div>
-
-      {/* CNAE */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium text-card-foreground">
-          CNAE Principal
-        </Label>
-        <CnaeCombobox
-          value={cnaePrincipal}
-          onChange={setCnaePrincipal}
-          placeholder="Digite código ou atividade..."
-          disabled={loading}
-        />
-        {cnaePrincipal && (
-          <p className="mt-1 text-xs text-muted-foreground">{cnaePrincipal.secao}</p>
-        )}
-      </div>
-
-      {/* Situação Cadastral */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium text-card-foreground">
-          Situação Cadastral
-        </Label>
-        <div className="flex flex-wrap gap-2">
-          {SITUACAO_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => toggleSituacao(opt.value)}
-              disabled={loading}
-              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-                situacaoCadastral.includes(opt.value)
-                  ? "bg-blue-600 text-white"
-                  : "bg-secondary text-muted-foreground hover:bg-secondary/80"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Qualificação rápida */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium text-card-foreground">Qualificação</Label>
-        <div className="rounded-lg bg-secondary p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="com_telefone"
-              checked={comTelefone}
-              onCheckedChange={(v) => setComTelefone(!!v)}
-              disabled={loading}
-            />
-            <label htmlFor="com_telefone" className="text-sm text-foreground cursor-pointer">
-              Somente com telefone
-            </label>
+        {/* Localização */}
+        <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
+          <SectionTitle>Localização</SectionTitle>
+          <div>
+            <p className="text-xs font-medium text-card-foreground mb-1.5">Estado (UF)</p>
+            <div className="flex flex-wrap gap-1">
+              {UF_LIST.map((uf) => (
+                <Chip key={uf} label={uf} active={form.ufs.includes(uf)}
+                  onClick={() => set("ufs", form.ufs.includes(uf) ? form.ufs.filter((u) => u !== uf) : [...form.ufs, uf])} />
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="com_email"
-              checked={comEmail}
-              onCheckedChange={(v) => setComEmail(!!v)}
-              disabled={loading}
-            />
-            <label htmlFor="com_email" className="text-sm text-foreground cursor-pointer">
-              Somente com e-mail
-            </label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="excluir_email_contab"
-              checked={excluirEmailContab}
-              onCheckedChange={(v) => setExcluirEmailContab(!!v)}
-              disabled={loading}
-            />
-            <label htmlFor="excluir_email_contab" className="text-sm text-foreground cursor-pointer">
-              Excluir e-mails de contabilidade
-            </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-card-foreground mb-1.5">
+                Município {form.ufs.length > 0 && `(${form.ufs.join(", ")})`}
+              </p>
+              <MunicipioPicker ufs={form.ufs} value={form.municipios} onChange={(v) => set("municipios", v)} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs font-medium text-card-foreground mb-1.5">CEP</p>
+                <Input value={form.cep} onChange={(e) => set("cep", e.target.value)} placeholder="00000-000" className="bg-secondary h-8 text-sm" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-card-foreground mb-1.5">DDD</p>
+                <Input value={form.ddd} onChange={(e) => set("ddd", e.target.value)} placeholder="11" className="bg-secondary h-8 text-sm" maxLength={2} />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Filtros Avançados (colapsável) */}
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 transition-colors"
-          disabled={loading}
-        >
-          {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          {showAdvanced ? "Ocultar filtros avançados" : "Mostrar filtros avançados"}
-        </button>
+        {/* Busca textual */}
+        <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-2">
+          <SectionTitle>Busca Textual</SectionTitle>
+          <Input value={form.termo} onChange={(e) => set("termo", e.target.value)}
+            placeholder="Ex: restaurante, clínica, construtora..." className="bg-secondary text-sm h-8" />
+          <div className="flex gap-2">
+            <Chip label="Radical" active={form.tipo_busca === "radical"} onClick={() => set("tipo_busca", "radical")} />
+            <Chip label="Exata"   active={form.tipo_busca === "exata"}   onClick={() => set("tipo_busca", "exata")} />
+          </div>
+        </div>
 
-        {showAdvanced && (
-          <div className="mt-3 space-y-4 rounded-lg border border-border p-4">
-            {/* Porte */}
+        {/* CNAE */}
+        <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-2">
+          <SectionTitle>Atividade (CNAE)</SectionTitle>
+          <CnaePicker value={form.cnaes} onChange={(v) => set("cnaes", v)} />
+          {form.cnaes.length > 0 && (
+            <Toggle label="Incluir CNAEs secundários" value={form.incluir_secundaria} onChange={(v) => set("incluir_secundaria", v)} />
+          )}
+        </div>
+
+        {/* Empresa */}
+        <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
+          <SectionTitle>Empresa</SectionTitle>
+          <div>
+            <p className="text-xs font-medium text-card-foreground mb-1.5">Situação</p>
+            <div className="flex flex-wrap gap-1">
+              {SITUACOES.map((s) => (
+                <Chip key={s} label={s} active={form.situacoes.includes(s)}
+                  onClick={() => set("situacoes", form.situacoes.includes(s) ? form.situacoes.filter((x) => x !== s) : [...form.situacoes, s])} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-card-foreground mb-1.5">Porte</p>
+            <div className="flex gap-2">
+              {PORTES.map((p) => (
+                <Chip key={p.value} label={p.label} active={form.portes.includes(p.value)}
+                  onClick={() => set("portes", form.portes.includes(p.value) ? form.portes.filter((v) => v !== p.value) : [...form.portes, p.value])} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-card-foreground mb-1.5">Natureza Jurídica (código)</p>
+            <Input value={form.natureza_juridica} onChange={(e) => set("natureza_juridica", e.target.value)}
+              placeholder="Ex: 2011, 2062" className="bg-secondary text-sm h-8" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="mb-2 block text-sm font-medium text-card-foreground">Porte da Empresa</Label>
-              <div className="flex flex-wrap gap-2">
-                {PORTE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => togglePorte(opt.value)}
-                    disabled={loading}
-                    className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-                      porte.includes(opt.value)
-                        ? "bg-blue-600 text-white"
-                        : "bg-secondary text-muted-foreground hover:bg-secondary/80"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              <p className="text-xs font-medium text-card-foreground mb-1.5">Abertura: De</p>
+              <Input type="date" value={form.abertura_de} onChange={(e) => set("abertura_de", e.target.value)} className="bg-secondary text-sm h-8" />
             </div>
-
-            {/* Matriz/Filial */}
             <div>
-              <Label className="mb-2 block text-sm font-medium text-card-foreground">Matriz / Filial</Label>
-              <Select value={matrizFilial || "ambos"} onValueChange={(v) => setMatrizFilial(v === "ambos" ? "" : v)} disabled={loading}>
-                <SelectTrigger className="bg-secondary">
-                  <SelectValue placeholder="Ambos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ambos">Ambos</SelectItem>
-                  <SelectItem value="MATRIZ">Somente Matriz</SelectItem>
-                  <SelectItem value="FILIAL">Somente Filial</SelectItem>
-                </SelectContent>
-              </Select>
+              <p className="text-xs font-medium text-card-foreground mb-1.5">Abertura: Até</p>
+              <Input type="date" value={form.abertura_ate} onChange={(e) => set("abertura_ate", e.target.value)} className="bg-secondary text-sm h-8" />
             </div>
-
-            {/* DDD */}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="mb-2 block text-sm font-medium text-card-foreground">
-                DDD (separados por vírgula)
-              </Label>
-              <Input
-                placeholder="Ex: 11, 21, 31"
-                value={ddd}
-                onChange={(e) => setDdd(e.target.value)}
-                className="bg-secondary"
-                disabled={loading}
-              />
+              <p className="text-xs font-medium text-card-foreground mb-1.5">Capital Mín. (R$)</p>
+              <Input type="number" value={form.capital_min} onChange={(e) => set("capital_min", e.target.value)} placeholder="0" className="bg-secondary text-sm h-8" />
             </div>
-
-            {/* Data de Abertura */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-2 block text-sm font-medium text-card-foreground">Abertura: De</Label>
-                <Input
-                  type="date"
-                  value={dataAberturaInicio}
-                  onChange={(e) => setDataAberturaInicio(e.target.value)}
-                  className="bg-secondary"
-                  disabled={loading}
-                />
-              </div>
-              <div>
-                <Label className="mb-2 block text-sm font-medium text-card-foreground">Abertura: Até</Label>
-                <Input
-                  type="date"
-                  value={dataAberturaFim}
-                  onChange={(e) => setDataAberturaFim(e.target.value)}
-                  className="bg-secondary"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* Capital Social */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-2 block text-sm font-medium text-card-foreground">Capital Mín. (R$)</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={capitalMin}
-                  onChange={(e) => setCapitalMin(e.target.value)}
-                  className="bg-secondary"
-                  disabled={loading}
-                />
-              </div>
-              <div>
-                <Label className="mb-2 block text-sm font-medium text-card-foreground">Capital Máx. (R$)</Label>
-                <Input
-                  type="number"
-                  placeholder="Sem limite"
-                  value={capitalMax}
-                  onChange={(e) => setCapitalMax(e.target.value)}
-                  className="bg-secondary"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* CNAE Secundário */}
             <div>
-              <Label className="mb-2 block text-sm font-medium text-card-foreground">CNAE Secundário</Label>
-              <CnaeCombobox
-                value={cnaeSecundario}
-                onChange={setCnaeSecundario}
-                placeholder="Digite código ou atividade..."
-                disabled={loading}
-              />
-              {cnaeSecundario && (
-                <p className="mt-1 text-xs text-muted-foreground">{cnaeSecundario.secao}</p>
+              <p className="text-xs font-medium text-card-foreground mb-1.5">Capital Máx. (R$)</p>
+              <Input type="number" value={form.capital_max} onChange={(e) => set("capital_max", e.target.value)} placeholder="ilimitado" className="bg-secondary text-sm h-8" />
+            </div>
+          </div>
+        </div>
+
+        {/* Filtros adicionais */}
+        <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
+          <SectionTitle>Filtros Adicionais</SectionTitle>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground">Contato</p>
+              <Toggle label="Com e-mail"  value={form.com_email}  onChange={(v) => set("com_email", v)} />
+              <Toggle label="Com telefone" value={form.com_telefone} onChange={(v) => { set("com_telefone", v); if (!v) { set("somente_celular", false); set("somente_fixo", false) } }} />
+              <Toggle label="Somente celular" value={form.somente_celular} onChange={(v) => { set("somente_celular", v); if (v) { set("com_telefone", true); set("somente_fixo", false) } }} />
+              <Toggle label="Somente fixo"    value={form.somente_fixo}    onChange={(v) => { set("somente_fixo", v);    if (v) { set("com_telefone", true); set("somente_celular", false) } }} />
+              <Toggle label="Excluir e-mail contab." value={form.excluir_email_contab} onChange={(v) => set("excluir_email_contab", v)} />
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">MEI</p>
+                <Toggle label="Somente MEI" value={form.somente_mei} onChange={(v) => { set("somente_mei", v); if (v) set("excluir_mei", false) }} />
+                <Toggle label="Excluir MEI"  value={form.excluir_mei}  onChange={(v) => { set("excluir_mei", v);  if (v) set("somente_mei", false) }} />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">Simples Nacional</p>
+                <Toggle label="Optante do Simples" value={form.simples_optante} onChange={(v) => { set("simples_optante", v); if (v) set("simples_excluir", false) }} />
+                <Toggle label="Excluir optantes"   value={form.simples_excluir} onChange={(v) => { set("simples_excluir", v); if (v) set("simples_optante", false) }} />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">Estabelecimento</p>
+                <Toggle label="Somente matriz" value={form.somente_matriz} onChange={(v) => { set("somente_matriz", v); if (v) set("somente_filial", false) }} />
+                <Toggle label="Somente filial"  value={form.somente_filial}  onChange={(v) => { set("somente_filial", v);  if (v) set("somente_matriz", false) }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Ações */}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+            {loading ? "Buscando..." : "🔍 Buscar empresas"}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => { setForm(EMPTY_FORM); setResults([]); setTotal(0); setError("") }}>
+            Limpar
+          </Button>
+        </div>
+        {error && <p className="text-xs text-red-500">{error}</p>}
+      </form>
+
+      {/* Resultados */}
+      {results.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="text-sm text-muted-foreground">
+              <span className="font-bold text-foreground">{total.toLocaleString("pt-BR")}</span> resultado{total !== 1 ? "s" : ""} · página {page}/{totalPages}
+            </div>
+            <div className="flex gap-2">
+              {savingAll ? (
+                <>
+                  <span className="text-xs text-muted-foreground self-center">
+                    Salvando... ({saveAllProgress?.done ?? 0}/{saveAllProgress?.total ?? total})
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => { cancelRef.current = true }}>Cancelar</Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={saveAll} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  + Salvar todos ({total.toLocaleString("pt-BR")})
+                </Button>
               )}
             </div>
-
-            {/* Natureza Jurídica */}
-            <div>
-              <Label className="mb-2 block text-sm font-medium text-card-foreground">Código Natureza Jurídica</Label>
-              <Input
-                placeholder="Ex: 2062 (Soc. Empresária Ltda)"
-                value={naturezaJuridica}
-                onChange={(e) => setNaturezaJuridica(e.target.value)}
-                className="bg-secondary"
-                disabled={loading}
-              />
-            </div>
-
-            {/* Tipo de telefone */}
-            <div>
-              <Label className="mb-2 block text-sm font-medium text-card-foreground">Tipo de Telefone</Label>
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="somente_celular"
-                    checked={somenteCelular}
-                    onCheckedChange={(v) => { setSomenteCelular(!!v); if (v) setSomenteFixo(false) }}
-                    disabled={loading}
-                  />
-                  <label htmlFor="somente_celular" className="text-sm text-foreground cursor-pointer">Celular</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="somente_fixo"
-                    checked={somenteFixo}
-                    onCheckedChange={(v) => { setSomenteFixo(!!v); if (v) setSomenteCelular(false) }}
-                    disabled={loading}
-                  />
-                  <label htmlFor="somente_fixo" className="text-sm text-foreground cursor-pointer">Fixo</label>
-                </div>
-              </div>
-            </div>
-
-            {/* MEI / Simples */}
-            <div>
-              <Label className="mb-2 block text-sm font-medium text-card-foreground">Regime Tributário</Label>
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="mei_optante"
-                    checked={meiOptante === true}
-                    onCheckedChange={(v) => setMeiOptante(v ? true : undefined)}
-                    disabled={loading}
-                  />
-                  <label htmlFor="mei_optante" className="text-sm text-foreground cursor-pointer">MEI</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="simples_optante"
-                    checked={simplesOptante === true}
-                    onCheckedChange={(v) => setSimplesOptante(v ? true : undefined)}
-                    disabled={loading}
-                  />
-                  <label htmlFor="simples_optante" className="text-sm text-foreground cursor-pointer">Simples Nacional</label>
-                </div>
-              </div>
-            </div>
           </div>
-        )}
-      </div>
 
-      {/* Limite de resultados */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium text-card-foreground">
-          Quantidade de empresas (máx. 100)
-        </Label>
-        <div className="rounded-lg bg-secondary p-4 space-y-2">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium text-foreground">{limite} empresas</span>
-            <span className="text-xs text-muted-foreground">~{limite} créditos</span>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-secondary/50 border-b border-border">
+                  {["CNPJ","Razão Social","Nome Fantasia","Município/UF","Segmento","Telefone","E-mail","Abertura","Situação","Ação"].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((item, i) => {
+                  const cnpj     = item.cnpj as string || ""
+                  const already  = inDb(cnpj)
+                  const wasSaved = saved[cnpj]
+                  const isSaving = saving[cnpj]
+                  const done     = already || wasSaved
+                  const end      = item.endereco as Record<string, unknown> | undefined
+                  const tel      = (item.contato_telefonico as Record<string, unknown>[] | undefined)?.[0]
+                  const email    = (item.contato_email as Record<string, unknown>[] | undefined)?.[0]
+                  const cnae     = item.atividade_principal as Record<string, unknown> | undefined
+                  const sit      = (item.situacao_cadastral as Record<string, unknown> | undefined)
+                  const sitStr   = (sit?.situacao_atual || sit?.situacao_cadastral || "—") as string
+                  return (
+                    <tr key={cnpj || i} className={`border-b border-border/50 ${done ? "bg-green-500/5" : "bg-background"}`}>
+                      <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap">{formatCNPJ(cnpj)}</td>
+                      <td className="px-3 py-2 max-w-[160px] truncate">{(item.razao_social as string) || "—"}</td>
+                      <td className="px-3 py-2 max-w-[120px] truncate text-muted-foreground">{(item.nome_fantasia as string) || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{[end?.municipio, end?.uf].filter(Boolean).join(" / ") || "—"}</td>
+                      <td className="px-3 py-2 max-w-[140px] truncate text-muted-foreground">{(cnae?.descricao as string) || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap font-mono">{(tel?.completo as string) || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap max-w-[140px] truncate text-muted-foreground">{(email?.email as string)?.toLowerCase() || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{formatDate(item.data_abertura as string)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className={`text-[10px] font-bold ${sitColor(sitStr)}`}>{sitStr}</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {done ? (
+                          <span className="text-green-500 font-semibold">✓ {already && !wasSaved ? "Já existe" : "Salvo"}</span>
+                        ) : (
+                          <Button size="sm" onClick={() => saveOne(item)} disabled={isSaving}
+                            className="h-6 px-2 text-[10px] bg-green-600 hover:bg-green-700 text-white">
+                            {isSaving ? "..." : "+ Salvar"}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-          <input
-            type="range"
-            min="10"
-            max="100"
-            step="10"
-            value={Math.min(limite, 100)}
-            onChange={(e) => setLimite(Number(e.target.value))}
-            disabled={loading}
-            className="w-full accent-blue-500 disabled:opacity-50"
-          />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>10</span>
-            <span>50</span>
-            <span>100</span>
-          </div>
-          <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Seu saldo:</span>
-            <span className={currentCredits >= creditEstimate ? "text-green-500 font-semibold" : "text-red-500 font-semibold"}>
-              {currentCredits} créditos
-            </span>
-          </div>
-        </div>
-      </div>
 
-      {/* Resultado anterior */}
-      {generationResult && (
-        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 space-y-2">
-          <h3 className="text-sm font-semibold text-green-500">Última Geração</h3>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <p className="text-muted-foreground">Encontrados na API</p>
-              <p className="text-lg font-bold text-foreground">{generationResult.totalEncontrado.toLocaleString()}</p>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3">
+              <Button size="sm" variant="outline" onClick={() => search(page - 1)} disabled={page <= 1 || loading}>← Anterior</Button>
+              <span className="text-xs text-muted-foreground">{page} / {totalPages}</span>
+              <Button size="sm" variant="outline" onClick={() => search(page + 1)} disabled={page >= totalPages || loading}>Próximo →</Button>
             </div>
-            <div>
-              <p className="text-muted-foreground">Salvos</p>
-              <p className="text-lg font-bold text-green-500">{generationResult.leadsAdded}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Créditos Gastos</p>
-              <p className="text-lg font-bold text-green-500">{generationResult.creditsUsed}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Duplicados</p>
-              <p className="text-lg font-bold text-orange-500">{generationResult.duplicatesSkipped}</p>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      <Button
-        className="w-full bg-blue-600 hover:bg-blue-700"
-        onClick={handleGerar}
-        disabled={loading}
-      >
-        {loading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Consultando...
-          </>
-        ) : (
-          <>
-            <Search className="mr-2 h-4 w-4" />
-            Buscar por CNPJ
-          </>
-        )}
-      </Button>
-
-      {/* Modal de confirmação */}
-      <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar Busca Casa dos Dados</DialogTitle>
-            <DialogDescription>Revise os parâmetros antes de continuar</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-lg bg-secondary p-4 space-y-2 text-sm">
-              {ufs.length > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Estados:</span>
-                  <span className="font-medium">{ufs.join(", ")}</span>
-                </div>
-              )}
-              {municipio && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Município:</span>
-                  <span className="font-medium">{municipio}</span>
-                </div>
-              )}
-              {cnaePrincipal && (
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground shrink-0">CNAE:</span>
-                  <span className="font-medium text-right">{cnaePrincipal.codigo} — {cnaePrincipal.descricao}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Situação:</span>
-                <span className="font-medium">{situacaoCadastral.join(", ") || "Todas"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Quantidade:</span>
-                <span className="font-medium">{limite} empresas</span>
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Estimativa de créditos:</span>
-                <span className="text-lg font-bold text-blue-500">~{creditEstimate}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Seu saldo atual:</span>
-                <span className={`text-lg font-bold ${currentCredits >= creditEstimate ? "text-green-500" : "text-red-500"}`}>
-                  {currentCredits}
-                </span>
-              </div>
-              {currentCredits < creditEstimate && (
-                <p className="text-xs text-red-500">Saldo insuficiente para esta operação.</p>
-              )}
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              * Créditos são cobrados apenas pelos contatos efetivamente salvos (novos, sem duplicatas).
-            </p>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowConfirmation(false)}>
-                Cancelar
-              </Button>
-              <Button
-                onClick={confirmAndGenerate}
-                disabled={currentCredits < creditEstimate}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                Confirmar e Buscar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {!loading && results.length === 0 && total === 0 && !error && (
+        <div className="text-center py-10 text-muted-foreground text-sm">
+          <div className="text-3xl mb-2">🔍</div>
+          Preencha os filtros e clique em Buscar para encontrar empresas.
+        </div>
+      )}
     </div>
   )
 }

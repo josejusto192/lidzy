@@ -33,6 +33,7 @@ import { ExportMenu } from "@/components/export-menu"
 interface Lead {
   id: string
   empresa: string
+  cnpj?: string
   telefone: string
   nicho: string
   status: string
@@ -185,6 +186,7 @@ export function DashboardContent() {
       const formattedLeads = data.contatos.map((contato: any) => ({
         id: contato.id,
         empresa: contato.nome_empresa,
+        cnpj: contato.cnpj,
         telefone: contato.telefone || "Não disponível",
         nicho: contato.nicho,
         status: contato.status,
@@ -693,6 +695,7 @@ export function DashboardContent() {
             <TabsContent value="casadados">
               <GeradorCasaDados
                 currentCredits={currentCredits}
+                existingCnpjs={leads.map((l) => (l.cnpj || "").replace(/\D/g, "")).filter(Boolean)}
                 onLeadsGenerated={async () => {
                   await loadLeads()
                   await loadCredits()
