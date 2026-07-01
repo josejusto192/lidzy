@@ -6,11 +6,21 @@ import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Coins, MessageCircle, TrendingDown, History } from "lucide-react"
+import { Coins, MessageCircle, TrendingDown, History, Check, Zap } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
 
 const WHATSAPP_URL = "https://wa.me/5515991485349"
+
+interface Plano {
+  id: string
+  nome: string
+  descricao: string
+  creditos_mensais: number
+  preco_mensal: number
+  preco_anual: number
+  features: string[]
+}
 
 interface CreditosData {
   creditos: number
@@ -40,6 +50,7 @@ export default function CreditosPage() {
   const [supabase] = useState(() => createClient())
   const [authLoading, setAuthLoading] = useState(true)
   const [data, setData] = useState<CreditosData | null>(null)
+  const [planos, setPlanos] = useState<Plano[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -57,8 +68,15 @@ export default function CreditosPage() {
 
   const fetchCreditos = async () => {
     try {
-      const res = await fetch("/api/creditos")
-      if (res.ok) setData(await res.json())
+      const [creditosRes, planosRes] = await Promise.all([
+        fetch("/api/creditos"),
+        fetch("/api/planos"),
+      ])
+      if (creditosRes.ok) setData(await creditosRes.json())
+      if (planosRes.ok) {
+        const p = await planosRes.json()
+        setPlanos(p.planos ?? [])
+      }
     } finally {
       setLoading(false)
     }
@@ -124,6 +142,66 @@ export default function CreditosPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Planos */}
+            {planos.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-yellow-500" />
+                  Planos disponíveis
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {planos.map((plano, i) => {
+                    const destaque = i === 1
+                    const msg = encodeURIComponent(
+                      `Olá! Gostaria de assinar o plano ${plano.nome} da Lidzy (R$ ${plano.preco_mensal.toFixed(2).replace(".", ",")}/mês — ${plano.creditos_mensais.toLocaleString("pt-BR")} créditos). Pode me ajudar?`
+                    )
+                    return (
+                      <div key={plano.id} className={`relative rounded-xl border p-5 flex flex-col gap-3 ${destaque ? "border-green-500 bg-green-500/5 shadow-md" : "border-border bg-card"}`}>
+                        {destaque && (
+                          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-green-500 px-3 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
+                            Mais popular
+                          </span>
+                        )}
+                        <div>
+                          <p className="font-bold text-base">{plano.nome}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{plano.descricao}</p>
+                        </div>
+                        <div>
+                          <span className="text-3xl font-extrabold">R$ {plano.preco_mensal.toFixed(2).replace(".", ",")}</span>
+                          <span className="text-sm text-muted-foreground">/mês</span>
+                          {plano.preco_anual && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              ou R$ {plano.preco_anual.toFixed(2).replace(".", ",")} /ano (2 meses grátis)
+                            </p>
+                          )}
+                        </div>
+                        <p className="text-sm font-semibold text-green-600">
+                          {plano.creditos_mensais.toLocaleString("pt-BR")} créditos/mês
+                        </p>
+                        <ul className="space-y-1.5 flex-1">
+                          {plano.features.map((f, fi) => (
+                            <li key={fi} className="flex items-start gap-2 text-xs text-muted-foreground">
+                              <Check className="h-3.5 w-3.5 text-green-500 mt-0.5 shrink-0" />
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                        <a
+                          href={`${WHATSAPP_URL}?text=${msg}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`mt-2 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${destaque ? "bg-green-600 hover:bg-green-700 text-white" : "border border-border bg-secondary hover:bg-secondary/80 text-foreground"}`}
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          Assinar via WhatsApp
+                        </a>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Solicitar créditos */}
             <Card className="border-blue-500/30 bg-blue-500/5">
