@@ -583,7 +583,7 @@ export function DashboardContent() {
                 Google Maps
               </TabsTrigger>
               <TabsTrigger value="casadados" className="flex-1 text-xs">
-                Casa dos Dados (CNPJ)
+                Receita Federal (CNPJ)
               </TabsTrigger>
             </TabsList>
 
