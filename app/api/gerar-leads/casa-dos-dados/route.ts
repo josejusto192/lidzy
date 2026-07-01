@@ -2,64 +2,76 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 
-// ── Tipos exatos da resposta v5 (documentação oficial) ───────────────────────
+// ── Tipos da resposta v5 da Casa dos Dados ───────────────────────────────────
 
-interface CddSituacaoCadastral {
-  situacao_cadastral: string
-  motivo?: string
-  data?: string
-}
-
-interface CddPorteEmpresa {
-  codigo: string
-  descricao: string
-}
-
-interface CddEndereco {
-  cep?: string
-  tipo_logradouro?: string
-  logradouro?: string
+interface CddTelefone {
+  ddd?: string
   numero?: string
-  complemento?: string
-  bairro?: string
-  uf?: string
-  municipio?: string
-  ibge?: { codigo_municipio?: number; codigo_uf?: number; latitude?: number; longitude?: number }
+  tipo?: string
 }
 
-interface CddCnpjItem {
+interface CddCnae {
+  codigo?: string
+  descricao?: string
+}
+
+interface CddSocio {
+  nome?: string
+  cpf_cnpj_socio?: string
+  qualificacao_socio?: string
+  data_entrada_sociedade?: string
+  pais?: string
+  representante_legal?: string
+  nome_representante?: string
+  qualificacao_representante_legal?: string
+  faixa_etaria?: string
+}
+
+interface CddItem {
   cnpj: string
   cnpj_raiz?: string
   razao_social: string
   nome_fantasia?: string
-  situacao_cadastral?: CddSituacaoCadastral
-  porte_empresa?: CddPorteEmpresa
   matriz_filial?: string
-  codigo_natureza_juridica?: string
-  descricao_natureza_juridica?: string
-  data_abertura?: string
-  capital_social?: number
-  endereco?: CddEndereco
-  // campos presentes no tipo_resultado=completo mas não documentados formalmente
+  situacao_cadastral?: { situacao_cadastral?: string; motivo?: string; data?: string } | string
+  porte_empresa?: { codigo?: string; descricao?: string } | string
+  natureza_juridica?: { codigo?: string; descricao?: string }
+  qualificacao_responsavel?: { codigo?: string; descricao?: string }
+  mei?: { optante?: boolean; data_opcao?: string; data_exclusao?: string }
+  simples?: { optante?: boolean; data_opcao?: string; data_exclusao?: string }
   cnae_fiscal?: string
   cnae_fiscal_descricao?: string
-  // telefone/email variam conforme créditos — tratamos de forma defensiva
+  cnaes_secundarios?: CddCnae[]
+  endereco?: {
+    cep?: string
+    tipo_logradouro?: string
+    logradouro?: string
+    numero?: string
+    complemento?: string
+    bairro?: string
+    municipio?: string
+    uf?: string
+    ibge?: { codigo_municipio?: number; codigo_uf?: number; latitude?: number; longitude?: number }
+  }
+  telefones?: CddTelefone[]
   telefone?: string
   ddd_telefone_1?: string
-  ddd_telefone_2?: string
+  emails?: Array<{ email: string; valido?: boolean; dominio?: string }>
   email?: string
-  telefones?: Array<{ ddd?: string; numero?: string; tipo?: string }>
-  emails?: Array<{ email: string }>
+  capital_social?: number
+  data_abertura?: string
+  data_evento?: string
+  quadro_societario?: CddSocio[]
 }
 
 interface CddResponse {
   total: number
-  cnpjs: CddCnpjItem[]
+  cnpjs: CddItem[]
 }
 
-// ── Payload de filtros recebido do frontend ──────────────────────────────────
+// ── Payload de filtros do frontend ───────────────────────────────────────────
 
-interface CddFiltros {
+interface Filtros {
   uf?: string[]
   municipio?: string[]
   bairro?: string[]
@@ -67,10 +79,9 @@ interface CddFiltros {
   ddd?: string[]
   codigo_atividade_principal?: string[]
   codigo_atividade_secundaria?: string[]
-  incluir_atividade_secundaria?: boolean
   codigo_natureza_juridica?: string[]
   situacao_cadastral?: string[]
-  matriz_filial?: "MATRIZ" | "FILIAL"
+  matriz_filial?: string
   porte_empresa?: string[]
   mei_optante?: boolean
   simples_optante?: boolean
@@ -88,25 +99,17 @@ interface CddFiltros {
   pagina?: number
 }
 
-// Normaliza texto para o formato que a API espera (minúsculo, sem acento)
 function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .trim()
+  return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim()
 }
 
-function buildCddPayload(filtros: CddFiltros) {
+function buildPayload(filtros: Filtros) {
   const payload: Record<string, unknown> = {
     limite: Math.min(filtros.limite ?? 100, 1000),
     pagina: filtros.pagina ?? 1,
   }
 
-  // UF deve ser minúsculo conforme a documentação (ex: "sp", "rj")
   if (filtros.uf?.length) payload.uf = filtros.uf.map((u) => u.toLowerCase())
-
-  // Município deve ser minúsculo e sem acentos (ex: "sao paulo")
   if (filtros.municipio?.length) payload.municipio = filtros.municipio.map(normalizeText)
   if (filtros.bairro?.length) payload.bairro = filtros.bairro.map(normalizeText)
   if (filtros.cep?.length) payload.cep = filtros.cep
@@ -117,7 +120,7 @@ function buildCddPayload(filtros: CddFiltros) {
 
   if (filtros.codigo_atividade_secundaria?.length) {
     payload.codigo_atividade_secundaria = filtros.codigo_atividade_secundaria
-    payload.incluir_atividade_secundaria = filtros.incluir_atividade_secundaria ?? true
+    payload.incluir_atividade_secundaria = true
   }
 
   if (filtros.codigo_natureza_juridica?.length)
@@ -131,11 +134,8 @@ function buildCddPayload(filtros: CddFiltros) {
   if (filtros.porte_empresa?.length)
     payload.porte_empresa = { codigos: filtros.porte_empresa }
 
-  if (filtros.mei_optante !== undefined)
-    payload.mei = { optante: filtros.mei_optante }
-
-  if (filtros.simples_optante !== undefined)
-    payload.simples = { optante: filtros.simples_optante }
+  if (filtros.mei_optante !== undefined) payload.mei = { optante: filtros.mei_optante }
+  if (filtros.simples_optante !== undefined) payload.simples = { optante: filtros.simples_optante }
 
   if (filtros.data_abertura_inicio || filtros.data_abertura_fim) {
     payload.data_abertura = {
@@ -151,7 +151,6 @@ function buildCddPayload(filtros: CddFiltros) {
     }
   }
 
-  // mais_filtros conforme documentação oficial
   const maisFiltros: Record<string, boolean> = {}
   if (filtros.com_email) maisFiltros.com_email = true
   if (filtros.com_telefone) maisFiltros.com_telefone = true
@@ -174,56 +173,66 @@ function buildCddPayload(filtros: CddFiltros) {
   return payload
 }
 
-// Extrai telefone de várias estruturas possíveis na resposta completa
-function extractPhone(item: CddCnpjItem): string | null {
-  // Formato array de objetos {ddd, numero}
+// ── Extração defensiva de dados ──────────────────────────────────────────────
+
+function extractPhone(item: CddItem) {
   if (item.telefones?.length) {
     for (const t of item.telefones) {
       const raw = `${t.ddd ?? ""}${t.numero ?? ""}`.replace(/\D/g, "")
-      if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
-      if (raw.length >= 12 && raw.length <= 13) return raw
+      if (raw.length >= 10 && raw.length <= 11) {
+        return { telefone: `55${raw}`, ddd: t.ddd ?? null, numero: t.numero ?? null, tipo: t.tipo ?? null }
+      }
     }
   }
-  // Formato string direta (alguns planos)
-  if (item.ddd_telefone_1) {
-    const raw = item.ddd_telefone_1.replace(/\D/g, "")
-    if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
-    if (raw.length >= 12) return raw
+
+  const rawStr = item.ddd_telefone_1 || item.telefone || ""
+  if (rawStr) {
+    const raw = rawStr.replace(/\D/g, "")
+    if (raw.length >= 10 && raw.length <= 11)
+      return { telefone: `55${raw}`, ddd: raw.slice(0, 2), numero: raw.slice(2), tipo: null }
+    if (raw.length >= 12)
+      return { telefone: raw, ddd: raw.slice(2, 4), numero: raw.slice(4), tipo: null }
   }
-  if (item.telefone) {
-    const raw = item.telefone.replace(/\D/g, "")
-    if (raw.length >= 10 && raw.length <= 11) return `55${raw}`
-    if (raw.length >= 12) return raw
-  }
-  return null
+
+  return { telefone: null, ddd: null, numero: null, tipo: null }
 }
 
-// Extrai email de várias estruturas possíveis
-function extractEmail(item: CddCnpjItem): string | null {
-  if (item.emails?.length) return item.emails[0].email
-  if (item.email) return item.email
-  return null
+function extractEmail(item: CddItem) {
+  if (item.emails?.length) {
+    const e = item.emails[0]
+    return { email: e.email, valido: e.valido ?? null, dominio: e.dominio ?? e.email.split("@")[1] ?? null }
+  }
+  if (item.email) {
+    return { email: item.email, valido: null, dominio: item.email.split("@")[1] ?? null }
+  }
+  return { email: null, valido: null, dominio: null }
 }
 
-// Monta string de endereço a partir do objeto endereco aninhado
-function buildEndereco(item: CddCnpjItem): string | null {
+function strSituacao(v: CddItem["situacao_cadastral"]): string | null {
+  if (!v) return null
+  if (typeof v === "string") return v
+  return v.situacao_cadastral ?? null
+}
+
+function strPorte(v: CddItem["porte_empresa"]): { codigo: string | null; descricao: string | null } {
+  if (!v) return { codigo: null, descricao: null }
+  if (typeof v === "string") return { codigo: null, descricao: v }
+  return { codigo: v.codigo ?? null, descricao: v.descricao ?? null }
+}
+
+function buildEndereco(item: CddItem): string | null {
   const e = item.endereco
   if (!e) return null
-  const parts = [e.logradouro, e.numero, e.complemento, e.bairro, e.municipio, e.uf]
-    .filter(Boolean)
-  return parts.length ? parts.join(", ") : null
+  return [e.logradouro, e.numero, e.complemento, e.bairro, e.municipio, e.uf].filter(Boolean).join(", ") || null
 }
+
+// ── Handler principal ─────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
-    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
 
     const apiKey = process.env.CASA_DOS_DADOS_API_KEY
     if (!apiKey) {
@@ -233,9 +242,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const filtros: CddFiltros = await request.json()
+    const filtros: Filtros = await request.json()
     const limite = Math.min(filtros.limite ?? 100, 1000)
 
+    // Verificar créditos
     const { data: usuario } = await supabase
       .from("usuarios")
       .select("creditos")
@@ -246,124 +256,132 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "INSUFFICIENT_CREDITS",
-          message: `Créditos insuficientes. Você precisa de aproximadamente ${limite} créditos. Saldo atual: ${usuario?.creditos || 0}.`,
+          message: `Créditos insuficientes. Você precisa de aproximadamente ${limite} créditos. Saldo atual: ${usuario?.creditos ?? 0}.`,
           required: limite,
-          current: usuario?.creditos || 0,
+          current: usuario?.creditos ?? 0,
         },
         { status: 402 },
       )
     }
 
-    const payload = buildCddPayload({ ...filtros, limite })
+    // Chamar API Casa dos Dados
+    const payload = buildPayload({ ...filtros, limite })
+    console.log("[cdd] payload →", JSON.stringify(payload))
 
-    console.log("[casa-dos-dados] Payload enviado:", JSON.stringify(payload, null, 2))
-
-    const cddResponse = await fetch(
+    const cddRes = await fetch(
       "https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultado=completo",
       {
         method: "POST",
-        headers: {
-          "api-key": apiKey,
-          "Content-Type": "application/json",
-        },
+        headers: { "api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       },
     )
 
-    if (!cddResponse.ok) {
-      const text = await cddResponse.text()
-      console.error(`[casa-dos-dados] API retornou ${cddResponse.status}: ${text.slice(0, 500)}`)
-      return NextResponse.json(
-        {
-          error: cddResponse.status === 401
-            ? "Chave da API inválida."
-            : cddResponse.status === 403
-            ? "Saldo insuficiente na Casa dos Dados."
-            : "Erro ao consultar a API da Casa dos Dados.",
-          details: text.slice(0, 300),
-          status: cddResponse.status,
-        },
-        { status: 502 },
-      )
+    if (!cddRes.ok) {
+      const text = await cddRes.text()
+      console.error(`[cdd] API ${cddRes.status}: ${text.slice(0, 500)}`)
+      const msg =
+        cddRes.status === 401 ? "Chave da API inválida." :
+        cddRes.status === 403 ? "Saldo esgotado na Casa dos Dados." :
+        `Erro ${cddRes.status} na API da Casa dos Dados.`
+      return NextResponse.json({ error: msg, details: text.slice(0, 300) }, { status: 502 })
     }
 
-    const cddData: CddResponse = await cddResponse.json()
-    const empresas = cddData.cnpjs || []
+    const cddData: CddResponse = await cddRes.json()
+    const empresas = cddData.cnpjs ?? []
+    console.log(`[cdd] recebidos ${empresas.length} de ${cddData.total}`)
 
-    console.log(`[casa-dos-dados] API retornou ${empresas.length} de ${cddData.total} total`)
-
+    // Mapear para o schema rico de contatos
     const rawLeads = empresas.map((item) => {
-      // situacao_cadastral é objeto aninhado na v5
-      const situacao = typeof item.situacao_cadastral === "object"
-        ? item.situacao_cadastral?.situacao_cadastral
-        : (item.situacao_cadastral as unknown as string) || null
-
-      // porte_empresa é objeto aninhado na v5
-      const porte = item.porte_empresa?.descricao || item.porte_empresa?.codigo || null
-
+      const { telefone, ddd, numero: telNum, tipo: telTipo } = extractPhone(item)
+      const { email, valido: emailValido, dominio: emailDominio } = extractEmail(item)
+      const situacao = strSituacao(item.situacao_cadastral)
+      const porte = strPorte(item.porte_empresa)
       const endereco = item.endereco
-      const municipio = endereco?.municipio || null
-      const uf = endereco?.uf || null
+      const municipio = endereco?.municipio ?? null
+      const uf = endereco?.uf ?? null
 
       return {
+        // Campos existentes (backward compat)
         nome_empresa: item.nome_fantasia || item.razao_social,
         cnpj: item.cnpj,
-        telefone: extractPhone(item),
-        email: extractEmail(item),
+        telefone,
+        email,
         endereco: buildEndereco(item),
-        regiao: municipio ? `${municipio}${uf ? ` - ${uf.toUpperCase()}` : ""}` : uf?.toUpperCase() || null,
-        nicho: item.cnae_fiscal_descricao || null,
+        regiao: municipio ? `${municipio}${uf ? ` - ${uf.toUpperCase()}` : ""}` : uf?.toUpperCase() ?? null,
+        nicho: item.cnae_fiscal_descricao ?? null,
         situacao_cadastral: situacao,
-        porte_empresa: porte,
-        natureza_juridica: item.descricao_natureza_juridica || null,
-        cnae_principal: item.cnae_fiscal || null,
-        data_abertura: item.data_abertura || null,
+        porte_empresa: porte.descricao,
+        natureza_juridica: item.natureza_juridica?.descricao ?? null,
+        cnae_principal: item.cnae_fiscal ?? null,
+        data_abertura: item.data_abertura ?? null,
         capital_social: item.capital_social ?? null,
         status: "novo_lead",
         origem: "casa_dos_dados",
         user_id: user.id,
-        fonte_detalhes: {
-          razao_social: item.razao_social,
-          cnae_descricao: item.cnae_fiscal_descricao || null,
-          municipio,
-          uf,
-          cep: endereco?.cep || null,
-          bairro: endereco?.bairro || null,
-        },
+
+        // Campos ricos
+        cnpj_raiz: item.cnpj_raiz ?? null,
+        razao_social: item.razao_social ?? null,
+        nome_fantasia: item.nome_fantasia ?? null,
+        matriz_filial: item.matriz_filial ?? null,
+        situacao_motivo: typeof item.situacao_cadastral === "object" ? item.situacao_cadastral?.motivo ?? null : null,
+        situacao_data: typeof item.situacao_cadastral === "object" ? item.situacao_cadastral?.data ?? null : null,
+        porte_codigo: porte.codigo,
+        porte_descricao: porte.descricao,
+        natureza_juridica_codigo: item.natureza_juridica?.codigo ?? null,
+        natureza_juridica_descricao: item.natureza_juridica?.descricao ?? null,
+        qualificacao_responsavel_codigo: item.qualificacao_responsavel?.codigo ?? null,
+        qualificacao_responsavel_descricao: item.qualificacao_responsavel?.descricao ?? null,
+        eh_mei: item.mei?.optante ?? false,
+        mei_data_opcao: item.mei?.data_opcao ?? null,
+        mei_data_exclusao: item.mei?.data_exclusao ?? null,
+        optante_simples: item.simples?.optante ?? false,
+        simples_data_opcao: item.simples?.data_opcao ?? null,
+        simples_data_exclusao: item.simples?.data_exclusao ?? null,
+        cnae_principal_codigo: item.cnae_fiscal ?? null,
+        cnae_principal_descricao: item.cnae_fiscal_descricao ?? null,
+        cnaes_secundarios: item.cnaes_secundarios?.length ? item.cnaes_secundarios : null,
+        cep: endereco?.cep ?? null,
+        tipo_logradouro: endereco?.tipo_logradouro ?? null,
+        logradouro: endereco?.logradouro ?? null,
+        numero_endereco: endereco?.numero ?? null,
+        complemento: endereco?.complemento ?? null,
+        bairro: endereco?.bairro ?? null,
+        municipio,
+        uf,
+        ibge_municipio: endereco?.ibge?.codigo_municipio ?? null,
+        ibge_uf: endereco?.ibge?.codigo_uf ?? null,
+        latitude: endereco?.ibge?.latitude ?? null,
+        longitude: endereco?.ibge?.longitude ?? null,
+        telefone_ddd: ddd,
+        telefone_numero: telNum,
+        telefone_tipo: telTipo,
+        email_valido: emailValido,
+        email_dominio: emailDominio,
+        quadro_societario: item.quadro_societario?.length ? item.quadro_societario : null,
+        data_evento: item.data_evento ?? null,
+        data_consulta: new Date().toISOString(),
+        payload_raw: item as unknown as Record<string, unknown>,
       }
     })
 
-    // Deduplicar internamente por CNPJ (prioridade) ou telefone
-    const seenKeys = new Set<string>()
-    const uniqueLeads = rawLeads.filter((lead) => {
-      const key = lead.cnpj || lead.telefone
-      if (!key || seenKeys.has(key)) return false
-      seenKeys.add(key)
+    // Deduplicar por CNPJ
+    const seenCnpj = new Set<string>()
+    const uniqueLeads = rawLeads.filter((l) => {
+      if (!l.cnpj || seenCnpj.has(l.cnpj)) return false
+      seenCnpj.add(l.cnpj)
       return true
     })
 
-    // Verificar duplicatas existentes no banco
+    // Checar duplicatas no banco
     const cnpjs = uniqueLeads.map((l) => l.cnpj).filter(Boolean) as string[]
-    const phones = uniqueLeads.map((l) => l.telefone).filter(Boolean) as string[]
+    const { data: existingRows } = cnpjs.length
+      ? await supabase.from("contatos").select("cnpj").in("cnpj", cnpjs).eq("user_id", user.id)
+      : { data: [] as { cnpj: string }[] }
 
-    const [{ data: existingByCnpj }, { data: existingByPhone }] = await Promise.all([
-      cnpjs.length
-        ? supabase.from("contatos").select("cnpj").in("cnpj", cnpjs).eq("user_id", user.id)
-        : Promise.resolve({ data: [] as { cnpj: string }[] }),
-      phones.length
-        ? supabase.from("contatos").select("telefone").in("telefone", phones).eq("user_id", user.id)
-        : Promise.resolve({ data: [] as { telefone: string }[] }),
-    ])
-
-    const existingCnpjs = new Set(existingByCnpj?.map((c) => c.cnpj) || [])
-    const existingPhones = new Set(existingByPhone?.map((c) => c.telefone) || [])
-
-    const newLeads = uniqueLeads.filter(
-      (lead) =>
-        !(lead.cnpj && existingCnpjs.has(lead.cnpj)) &&
-        !(lead.telefone && existingPhones.has(lead.telefone)),
-    )
-
+    const existingCnpjs = new Set((existingRows ?? []).map((r) => r.cnpj))
+    const newLeads = uniqueLeads.filter((l) => !existingCnpjs.has(l.cnpj))
     const duplicatesSkipped = rawLeads.length - newLeads.length
 
     if (newLeads.length === 0) {
@@ -373,56 +391,50 @@ export async function POST(request: NextRequest) {
         totalEncontrado: cddData.total,
         leads: [],
         duplicatesSkipped,
+        creditsUsed: 0,
         message: "Todos os contatos já existem no banco de dados.",
       })
     }
 
-    const { data: insertedLeads, error: insertError } = await supabase
+    const { data: inserted, error: insertError } = await supabase
       .from("contatos")
-      .upsert(newLeads, { onConflict: "telefone,user_id", ignoreDuplicates: true })
+      .upsert(newLeads, { onConflict: "cnpj,user_id", ignoreDuplicates: true })
       .select()
 
     if (insertError) {
-      console.error("[casa-dos-dados] Erro ao salvar:", insertError)
+      console.error("[cdd] upsert error:", insertError)
       return NextResponse.json({ error: "Erro ao salvar leads no banco de dados." }, { status: 500 })
     }
 
-    const creditsUsed = insertedLeads?.length || 0
+    const creditsUsed = inserted?.length ?? 0
 
+    // Descontar créditos
     if (creditsUsed > 0) {
       const cookieStore = await cookies()
-      const cookieHeader = cookieStore
-        .getAll()
-        .map((c) => `${c.name}=${c.value}`)
-        .join("; ")
-
-      const creditResponse = await fetch(`${request.nextUrl.origin}/api/creditos/usar`, {
+      const cookieHeader = cookieStore.getAll().map((c) => `${c.name}=${c.value}`).join("; ")
+      await fetch(`${request.nextUrl.origin}/api/creditos/usar`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: cookieHeader },
         body: JSON.stringify({
           quantidade: creditsUsed,
           tipo: "uso_lead",
-          descricao: `Geração de ${creditsUsed} leads via Casa dos Dados`,
+          descricao: `${creditsUsed} leads gerados via Receita Federal (CNPJ)`,
         }),
       })
-
-      if (!creditResponse.ok) {
-        console.error("[casa-dos-dados] Erro ao descontar créditos:", await creditResponse.text())
-      }
     }
 
-    const leads = (insertedLeads || []).map((lead) => ({
-      id: lead.id,
-      empresa: lead.nome_empresa,
-      cnpj: lead.cnpj,
-      telefone: lead.telefone || "Não disponível",
-      email: lead.email,
-      nicho: lead.nicho,
-      status: lead.status,
-      endereco: lead.endereco,
-      regiao: lead.regiao,
-      situacao_cadastral: lead.situacao_cadastral,
-      porte_empresa: lead.porte_empresa,
+    const leads = (inserted ?? []).map((l) => ({
+      id: l.id,
+      empresa: l.nome_empresa,
+      cnpj: l.cnpj,
+      telefone: l.telefone ?? "Não disponível",
+      email: l.email,
+      nicho: l.nicho,
+      status: l.status,
+      endereco: l.endereco,
+      regiao: l.regiao,
+      situacao_cadastral: l.situacao_cadastral,
+      porte_empresa: l.porte_empresa,
     }))
 
     return NextResponse.json({
@@ -434,11 +446,11 @@ export async function POST(request: NextRequest) {
       creditsUsed,
       message:
         duplicatesSkipped > 0
-          ? `${leads.length} novos contatos salvos (${creditsUsed} créditos usados). ${duplicatesSkipped} duplicados ignorados.`
-          : `${leads.length} novos contatos salvos (${creditsUsed} créditos usados).`,
+          ? `${leads.length} novos contatos salvos (${creditsUsed} créditos). ${duplicatesSkipped} duplicados ignorados.`
+          : `${leads.length} novos contatos salvos (${creditsUsed} créditos).`,
     })
   } catch (error) {
-    console.error("[casa-dos-dados] Erro:", error)
+    console.error("[cdd] erro:", error)
     return NextResponse.json({ error: "Erro ao gerar leads. Tente novamente." }, { status: 500 })
   }
 }
