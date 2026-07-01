@@ -2,7 +2,27 @@
 -- Referral system v2: CPF verification + abuse prevention
 -- =====================================================
 
--- 1. CPF único na tabela usuarios (anti-abuse)
+-- 1. Cria tabela referrals se não existir
+CREATE TABLE IF NOT EXISTS referrals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  referred_id UUID REFERENCES usuarios(id) ON DELETE CASCADE,
+  referred_email TEXT,
+  codigo_referencia TEXT,
+  status TEXT DEFAULT 'pending',
+  creditos_bonus INTEGER DEFAULT 0,
+  bonus_liberado BOOLEAN DEFAULT FALSE,
+  cpf_verificado TEXT,
+  liberado_em TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  UNIQUE (referred_email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON referrals(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_referred_id ON referrals(referred_id);
+
+-- 2. CPF único na tabela usuarios (anti-abuse)
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cpf TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS indicado_por UUID REFERENCES usuarios(id);
 
@@ -16,9 +36,9 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Campos extras na tabela referrals
+-- 3. Campos extras na tabela referrals (caso já exista sem elas)
 ALTER TABLE referrals ADD COLUMN IF NOT EXISTS bonus_liberado BOOLEAN DEFAULT FALSE;
-ALTER TABLE referrals ADD COLUMN IF NOT EXISTS cpf_verificado TEXT; -- CPF do indicado no momento da liberação
+ALTER TABLE referrals ADD COLUMN IF NOT EXISTS cpf_verificado TEXT;
 ALTER TABLE referrals ADD COLUMN IF NOT EXISTS liberado_em TIMESTAMPTZ;
 
 -- 3. Função para liberar bônus após verificação de CPF
