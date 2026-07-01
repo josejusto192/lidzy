@@ -40,7 +40,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     const {
-      nome_empresa, razao_social, nome_fantasia, cnpj, telefone, email,
+      tipo_pessoa,
+      nome_empresa, razao_social, nome_fantasia, nome_completo,
+      cnpj, cpf, telefone, email,
       website, nicho, regiao, status, valor, notas,
       endereco, municipio, uf, cep, logradouro, numero_endereco, complemento, bairro,
       instagram_url, linkedin_url, facebook_url, site_url,
@@ -49,52 +51,68 @@ export async function POST(request: NextRequest) {
       eh_mei, optante_simples,
     } = body
 
-    if (!nome_empresa && !razao_social) {
-      return NextResponse.json({ error: "Nome da empresa é obrigatório" }, { status: 400 })
+    const isPF = tipo_pessoa === "fisica"
+    const nomeDisplay = isPF ? (nome_completo || nome_empresa) : (nome_empresa || razao_social)
+
+    if (!nomeDisplay) {
+      return NextResponse.json({ error: isPF ? "Nome completo é obrigatório" : "Nome da empresa é obrigatório" }, { status: 400 })
     }
 
-    const { data, error } = await supabase
-      .from("contatos")
-      .insert({
-        user_id: user.id,
-        nome_empresa: nome_empresa || razao_social,
-        razao_social,
-        nome_fantasia,
-        cnpj: cnpj?.replace(/\D/g, "") || null,
-        telefone,
-        email,
-        website,
-        nicho,
-        regiao,
-        status: status || "pendente",
-        valor,
-        notas,
-        endereco,
-        municipio,
-        uf,
-        cep,
-        logradouro,
-        numero_endereco,
-        complemento,
-        bairro,
-        instagram_url,
-        linkedin_url,
-        facebook_url,
-        site_url,
-        cnae_principal,
-        cnae_principal_descricao,
-        porte_empresa,
-        natureza_juridica,
-        data_abertura: data_abertura || null,
-        capital_social: capital_social || null,
-        eh_mei: eh_mei ?? null,
-        optante_simples: optante_simples ?? null,
-        origem: "manual",
-      })
-      .select("id")
-      .single()
+    const insert: Record<string, any> = {
+      user_id: user.id,
+      tipo_pessoa: tipo_pessoa || "juridica",
+      nome_empresa: nomeDisplay,
+      telefone: telefone || null,
+      email: email || null,
+      website: website || null,
+      nicho: nicho || null,
+      regiao: regiao || null,
+      status: status || "pendente",
+      notas: notas || null,
+      endereco: endereco || null,
+      municipio: municipio || null,
+      uf: uf || null,
+      cep: cep || null,
+      logradouro: logradouro || null,
+      numero_endereco: numero_endereco || null,
+      complemento: complemento || null,
+      bairro: bairro || null,
+      instagram_url: instagram_url || null,
+      linkedin_url: linkedin_url || null,
+      facebook_url: facebook_url || null,
+      site_url: site_url || null,
+      origem: "manual",
+    }
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // Campos específicos PJ
+    if (!isPF) {
+      insert.razao_social = razao_social || null
+      insert.nome_fantasia = nome_fantasia || null
+      insert.cnpj = cnpj ? cnpj.replace(/\D/g, "") : null
+      insert.cnae_principal = cnae_principal || null
+      insert.cnae_principal_descricao = cnae_principal_descricao || null
+      insert.porte_empresa = porte_empresa || null
+      insert.natureza_juridica = natureza_juridica || null
+      insert.data_abertura = data_abertura || null
+      insert.capital_social = capital_social ? Number(capital_social) : null
+      insert.eh_mei = eh_mei ?? null
+      insert.optante_simples = optante_simples ?? null
+    }
+
+    // Campos específicos PF
+    if (isPF) {
+      insert.nome_completo = nome_completo || null
+      insert.cpf = cpf ? cpf.replace(/\D/g, "") : null
+    }
+
+    if (valor) insert.valor = Number(valor)
+
+    const { data, error } = await supabase.from("contatos").insert(insert).select("id").single()
+
+    if (error) {
+      console.error("[contatos POST]", JSON.stringify(error))
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     return NextResponse.json({ id: data.id }, { status: 201 })
   } catch (error) {
