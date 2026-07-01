@@ -137,12 +137,12 @@ export async function POST(request: NextRequest) {
 
     const { data: inserted, error: insertError } = await supabase
       .from("contatos")
-      .upsert(newLeads, { onConflict: "cnpj,user_id", ignoreDuplicates: true })
+      .insert(newLeads)
       .select("cnpj")
 
     if (insertError) {
-      console.error("[cdd/salvar] upsert error:", insertError)
-      return NextResponse.json({ error: "Erro ao salvar contatos." }, { status: 500 })
+      console.error("[cdd/salvar] insert error:", JSON.stringify(insertError))
+      return NextResponse.json({ error: "Erro ao salvar contatos.", details: insertError.message }, { status: 500 })
     }
 
     const saved = inserted?.length ?? 0
