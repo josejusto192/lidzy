@@ -489,7 +489,7 @@ export function DashboardContent() {
   const enviados = leads.filter((l) => l.status === "mensagem enviada").length
   const erros = leads.filter((l) => l.status === "erro").length
 
-  const nichosUnicos = Array.from(new Set(leads.map((lead) => lead.nicho)))
+  const nichosUnicos = Array.from(new Set(leads.map((lead) => lead.nicho).filter(Boolean)))
   const regioesUnicas = Array.from(new Set(leads.map((lead) => lead.regiao).filter(Boolean)))
 
   const filteredLeadsCount = leads.filter((lead) => {
