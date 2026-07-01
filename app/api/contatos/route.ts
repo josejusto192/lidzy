@@ -22,7 +22,12 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Filtros aplicados:", { status, nicho, regiao })
 
-    let query = supabase.from("contatos").select("*").eq("user_id", user.id).order("criado_em", { ascending: false })
+    // Excluir colunas pesadas (payload_raw, quadro_societario, cnaes_secundarios) da listagem
+    let query = supabase
+      .from("contatos")
+      .select("id, nome_empresa, cnpj, cnpj_raiz, razao_social, nome_fantasia, telefone, email, endereco, regiao, nicho, status, origem, website, valor, criado_em, data_contato, situacao_cadastral, situacao_motivo, situacao_data, porte_empresa, natureza_juridica, cnae_principal, cnae_principal_codigo, cnae_principal_descricao, data_abertura, capital_social, eh_mei, optante_simples, matriz_filial, cep, logradouro, numero_endereco, complemento, bairro, municipio, uf, telefone_tipo, email_valido, email_dominio, instagram_url, linkedin_url, facebook_url, site_url")
+      .eq("user_id", user.id)
+      .order("criado_em", { ascending: false })
 
     if (status && status !== "todos") {
       query = query.eq("status", status)

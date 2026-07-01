@@ -3,16 +3,19 @@
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Globe, User, Bot, Upload, Zap, MessageSquare } from "lucide-react"
+import { Globe, User, Bot, Upload, Zap, MessageSquare, Building2 } from "lucide-react"
 import { toast } from "sonner"
 
 const ORIGEM_OPTIONS = [
-  { value: "manual", label: "Manual", icon: User, color: "bg-blue-500" },
-  { value: "scraping", label: "Scraping", icon: Globe, color: "bg-purple-500" },
-  { value: "importacao", label: "Importação", icon: Upload, color: "bg-green-500" },
+  { value: "casa_dos_dados", label: "Receita Federal (CNPJ)", icon: Building2, color: "bg-blue-600" },
+  { value: "google_maps", label: "Google Maps", icon: Globe, color: "bg-red-500" },
+  { value: "serper", label: "Google Maps", icon: Globe, color: "bg-red-500" },
+  { value: "manual", label: "Manual", icon: User, color: "bg-gray-500" },
+  { value: "importacao", label: "Importação CSV", icon: Upload, color: "bg-green-500" },
   { value: "agente_ia", label: "Agente IA", icon: Bot, color: "bg-orange-500" },
-  { value: "api", label: "API", icon: Zap, color: "bg-yellow-500" },
   { value: "whatsapp", label: "WhatsApp", icon: MessageSquare, color: "bg-emerald-500" },
+  { value: "api", label: "API", icon: Zap, color: "bg-yellow-500" },
+  { value: "scraping", label: "Scraping", icon: Globe, color: "bg-purple-500" },
 ]
 
 interface ContactOriginSelectorProps {
