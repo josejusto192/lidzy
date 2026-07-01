@@ -28,6 +28,7 @@ import { DatabaseSetupAlert } from "@/components/database-setup-alert"
 import { AlertDialogCustom } from "@/components/alert-dialog-custom"
 import { STATUS_LABELS, STATUS_COLORS, type StatusContato } from "@/lib/status-config"
 import { GeradorCasaDados } from "@/components/gerador-casa-dos-dados"
+import { ExportMenu } from "@/components/export-menu"
 
 interface Lead {
   id: string
@@ -781,6 +782,11 @@ export function DashboardContent() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Exportar */}
+            <ExportMenu
+              filters={{ status: statusFilter, nicho: nichoFilter, regiao: regiaoFilter }}
+            />
           </div>
         </div>
 

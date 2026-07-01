@@ -99,6 +99,45 @@ export async function POST(request: Request) {
 
           console.log("[v0] Créditos adicionados:", assinatura.planos.creditos_mensais)
 
+          // Bonus de indicação: 500 créditos para quem indicou (apenas na primeira assinatura)
+          const { data: referral } = await supabase
+            .from("referrals")
+            .select("id, referrer_id, status")
+            .eq("referred_id", assinatura.user_id)
+            .eq("status", "pending")
+            .single()
+
+          if (referral?.referrer_id) {
+            const BONUS_REFERRER = 500
+            const { data: referrerUsuario } = await supabase
+              .from("usuarios")
+              .select("creditos")
+              .eq("id", referral.referrer_id)
+              .single()
+
+            const saldoAnterior = referrerUsuario?.creditos ?? 0
+            await supabase
+              .from("usuarios")
+              .update({ creditos: saldoAnterior + BONUS_REFERRER })
+              .eq("id", referral.referrer_id)
+
+            await supabase.from("historico_creditos").insert({
+              user_id: referral.referrer_id,
+              tipo: "bonus_indicacao",
+              quantidade: BONUS_REFERRER,
+              saldo_anterior: saldoAnterior,
+              saldo_novo: saldoAnterior + BONUS_REFERRER,
+              descricao: `Bônus de indicação — indicado assinou a plataforma`,
+            })
+
+            await supabase
+              .from("referrals")
+              .update({ status: "rewarded", creditos_bonus: BONUS_REFERRER, completed_at: new Date().toISOString() })
+              .eq("id", referral.id)
+
+            console.log("[referral] +500 créditos para referrer:", referral.referrer_id)
+          }
+
           // Enviar email de confirmação
           if (usuario?.email) {
             await sendEmail({

@@ -590,7 +590,7 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
       {/* Limite de resultados */}
       <div>
         <Label className="mb-2 block text-sm font-medium text-card-foreground">
-          Quantidade de empresas (máx. 1000)
+          Quantidade de empresas (máx. 100)
         </Label>
         <div className="rounded-lg bg-secondary p-4 space-y-2">
           <div className="flex items-center justify-between mb-1">
@@ -600,17 +600,17 @@ export function GeradorCasaDados({ currentCredits, onLeadsGenerated, onAlert }: 
           <input
             type="range"
             min="10"
-            max="1000"
+            max="100"
             step="10"
-            value={limite}
+            value={Math.min(limite, 100)}
             onChange={(e) => setLimite(Number(e.target.value))}
             disabled={loading}
             className="w-full accent-blue-500 disabled:opacity-50"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>10</span>
-            <span>500</span>
-            <span>1000</span>
+            <span>50</span>
+            <span>100</span>
           </div>
           <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Seu saldo:</span>

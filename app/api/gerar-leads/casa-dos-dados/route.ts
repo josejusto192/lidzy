@@ -175,6 +175,8 @@ function buildPayload(filtros: Filtros, pagina: number) {
 }
 
 // ── Mapeamento dos campos conforme documentação oficial ───────────────────────
+// Só insere colunas que existem na tabela base. Todos os dados ricos ficam
+// também em fonte_detalhes (json) para não depender da migration ter sido rodada.
 
 function mapItem(item: CddItem, userId: string) {
   const tel = item.contato_telefonico?.[0]
@@ -186,7 +188,6 @@ function mapItem(item: CddItem, userId: string) {
   const municipio = endereco?.municipio ?? null
   const uf = endereco?.uf ?? null
 
-  // Normaliza telefone: garante prefixo 55
   let telefoneNorm: string | null = null
   if (tel?.completo) {
     const raw = tel.completo.replace(/\D/g, "")
@@ -194,7 +195,7 @@ function mapItem(item: CddItem, userId: string) {
   }
 
   return {
-    // ── Backward compat (colunas existentes) ──
+    // Colunas que existem na tabela atual (sem depender da migration)
     nome_empresa: item.nome_fantasia || item.razao_social,
     cnpj: item.cnpj.replace(/\D/g, ""),
     telefone: telefoneNorm,
@@ -212,49 +213,34 @@ function mapItem(item: CddItem, userId: string) {
     status: "novo_lead",
     origem: "casa_dos_dados",
     user_id: userId,
-
-    // ── Campos ricos ──
-    cnpj_raiz: item.cnpj_raiz ?? null,
-    razao_social: item.razao_social ?? null,
-    nome_fantasia: item.nome_fantasia ?? null,
-    matriz_filial: item.matriz_filial ?? null,
-    situacao_motivo: situacao?.motivo ?? null,
-    situacao_data: situacao?.data ?? null,
-    porte_codigo: item.porte_empresa?.codigo ?? null,
-    porte_descricao: item.porte_empresa?.descricao ?? null,
-    natureza_juridica_codigo: item.codigo_natureza_juridica ?? null,
-    natureza_juridica_descricao: item.descricao_natureza_juridica ?? null,
-    qualificacao_responsavel_codigo: item.qualificacao_responsavel?.codigo ?? null,
-    qualificacao_responsavel_descricao: item.qualificacao_responsavel?.descricao ?? null,
-    eh_mei: item.mei?.optante ?? false,
-    mei_data_opcao: item.mei?.data_opcao_mei ?? null,
-    mei_data_exclusao: item.mei?.data_exclusao_mei ?? null,
-    optante_simples: item.simples?.optante ?? false,
-    simples_data_opcao: item.simples?.data_opcao_simples ?? null,
-    simples_data_exclusao: item.simples?.data_exclusao_simples ?? null,
-    cnae_principal_codigo: cnae?.codigo ?? null,
-    cnae_principal_descricao: cnae?.descricao ?? null,
-    cnaes_secundarios: cnaesSecundarios.length ? cnaesSecundarios : null,
-    cep: endereco?.cep ?? null,
-    tipo_logradouro: endereco?.tipo_logradouro ?? null,
-    logradouro: endereco?.logradouro ?? null,
-    numero_endereco: endereco?.numero ?? null,
-    complemento: endereco?.complemento ?? null,
-    bairro: endereco?.bairro ?? null,
-    municipio,
-    uf,
-    ibge_municipio: endereco?.ibge?.codigo_municipio ?? null,
-    ibge_uf: endereco?.ibge?.codigo_uf ?? null,
-    latitude: endereco?.ibge?.latitude ?? null,
-    longitude: endereco?.ibge?.longitude ?? null,
-    telefone_ddd: tel?.ddd ?? null,
-    telefone_numero: tel?.numero ?? null,
-    telefone_tipo: tel?.tipo ?? null,
-    email_valido: emailObj?.valido ?? null,
-    email_dominio: emailObj?.dominio ?? emailObj?.email?.split("@")[1] ?? null,
-    quadro_societario: item.quadro_societario?.length ? item.quadro_societario : null,
-    data_consulta: new Date().toISOString(),
-    payload_raw: item as unknown as Record<string, unknown>,
+    // Todos os dados ricos ficam em fonte_detalhes até a migration ser rodada
+    fonte_detalhes: {
+      razao_social: item.razao_social,
+      cnpj_raiz: item.cnpj_raiz,
+      matriz_filial: item.matriz_filial,
+      situacao_motivo: situacao?.motivo,
+      situacao_data: situacao?.data,
+      porte_codigo: item.porte_empresa?.codigo,
+      natureza_juridica_codigo: item.codigo_natureza_juridica,
+      qualificacao_responsavel: item.qualificacao_responsavel,
+      eh_mei: item.mei?.optante ?? false,
+      mei_data_opcao: item.mei?.data_opcao_mei,
+      optante_simples: item.simples?.optante ?? false,
+      simples_data_opcao: item.simples?.data_opcao_simples,
+      cnaes_secundarios: cnaesSecundarios,
+      cep: endereco?.cep,
+      bairro: endereco?.bairro,
+      municipio,
+      uf,
+      ibge: endereco?.ibge,
+      telefone_ddd: tel?.ddd,
+      telefone_tipo: tel?.tipo,
+      email_valido: emailObj?.valido,
+      email_dominio: emailObj?.dominio ?? emailObj?.email?.split("@")[1],
+      quadro_societario: item.quadro_societario,
+      data_consulta: new Date().toISOString(),
+      payload_raw: item,
+    },
   }
 }
 
@@ -275,7 +261,8 @@ export async function POST(request: NextRequest) {
     }
 
     const filtros: Filtros = await request.json()
-    const limiteDesejado = Math.min(filtros.limite ?? 100, 1000)
+    // Máximo de 100 por requisição (5 páginas × 20) para não estourar o timeout do serverless
+    const limiteDesejado = Math.min(filtros.limite ?? 100, 100)
 
     // Verificar créditos
     const { data: usuario } = await supabase
@@ -323,7 +310,7 @@ export async function POST(request: NextRequest) {
       if (allItems.length >= limiteDesejado || allItems.length >= data.total) break
 
       // Pausa entre páginas para não estourar rate limit
-      if (page < pagesNeeded) await new Promise((r) => setTimeout(r, 300))
+      if (page < pagesNeeded) await new Promise((r) => setTimeout(r, 100))
     }
 
     console.log(`[cdd] coletados ${allItems.length} de ${totalEncontrado} total`)
