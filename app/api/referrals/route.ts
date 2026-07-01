@@ -25,7 +25,7 @@ export async function GET() {
       usuario = { codigo_referencia: codigo }
     }
 
-    // Get user's referrals
+    // Indicações feitas pelo usuário (ele é o referrer)
     const { data: referrals, error: referralsError } = await supabase
       .from("referrals")
       .select("*, usuarios!referrals_referred_id_fkey(nome, email)")
@@ -35,6 +35,13 @@ export async function GET() {
     if (referralsError) {
       console.error("[v0] Referrals error:", referralsError)
     }
+
+    // Indicação recebida pelo usuário (ele é o indicado) — para banner de CPF pendente
+    const { data: myReferral } = await supabase
+      .from("referrals")
+      .select("id, referrer_id, bonus_liberado, status")
+      .eq("referred_id", user.id)
+      .maybeSingle()
 
     // Calculate stats
     const stats = {
@@ -48,6 +55,7 @@ export async function GET() {
       codigo_referencia: usuario?.codigo_referencia,
       stats,
       referrals: referrals || [],
+      my_referral: myReferral || null,
     })
   } catch (error) {
     console.error("[v0] Error:", error)

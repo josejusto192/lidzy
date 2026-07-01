@@ -53,7 +53,44 @@ export async function PUT(request: Request) {
   const body = await request.json()
   const { nome, telefone, data_nascimento, cpf_cnpj, endereco, cidade, estado, cep } = body
 
-  const sanitizedData = {
+  // Se vier CPF (11 dígitos), trata via RPC para liberar bônus de indicação
+  const cpfClean = cpf_cnpj?.replace(/\D/g, "")
+  const isCpf = cpfClean?.length === 11
+
+  // Verifica se usuário já tinha CPF cadastrado
+  const { data: usuarioAtual } = await supabase
+    .from("usuarios")
+    .select("cpf, cpf_cnpj, indicado_por")
+    .eq("id", user.id)
+    .single()
+
+  let bonusResult: any = null
+
+  // Primeiro CPF sendo cadastrado com indicação pendente → tenta liberar bônus
+  if (isCpf && !usuarioAtual?.cpf && usuarioAtual?.indicado_por) {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("liberar_bonus_indicacao", {
+      p_user_id: user.id,
+      p_cpf: cpfClean,
+    })
+
+    if (rpcError?.message?.includes("usuarios_cpf_unique") || rpcResult?.error?.includes("CPF já cadastrado")) {
+      return NextResponse.json({ error: "CPF já cadastrado em outra conta" }, { status: 409 })
+    }
+
+    bonusResult = rpcResult
+  } else if (isCpf && !usuarioAtual?.cpf) {
+    // CPF novo sem indicação — só salva o CPF via RPC (resolve unique constraint)
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("liberar_bonus_indicacao", {
+      p_user_id: user.id,
+      p_cpf: cpfClean,
+    })
+    if (rpcError?.message?.includes("usuarios_cpf_unique") || rpcResult?.error?.includes("CPF já cadastrado")) {
+      return NextResponse.json({ error: "CPF já cadastrado em outra conta" }, { status: 409 })
+    }
+    bonusResult = rpcResult
+  }
+
+  const sanitizedData: Record<string, any> = {
     nome: nome || null,
     telefone: telefone || null,
     data_nascimento: data_nascimento || null,
@@ -65,7 +102,6 @@ export async function PUT(request: Request) {
     atualizado_em: new Date().toISOString(),
   }
 
-  // Atualiza dados do usuário
   const { data, error } = await supabase.from("usuarios").update(sanitizedData).eq("id", user.id).select().single()
 
   if (error) {
@@ -73,5 +109,5 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Erro ao atualizar dados" }, { status: 500 })
   }
 
-  return NextResponse.json({ usuario: data })
+  return NextResponse.json({ usuario: data, bonus: bonusResult })
 }

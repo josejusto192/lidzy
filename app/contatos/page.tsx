@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { DashboardContent } from "@/components/dashboard-content"
 import { OnboardingModal } from "@/components/onboarding-modal"
+import { ReferralBanner } from "@/components/referral-banner"
 import { createClient } from "@/lib/supabase/client"
 
 export default function ContatosPage() {
@@ -48,6 +49,7 @@ export default function ContatosPage() {
         <Header title="Contatos" />
         <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
           <OnboardingModal />
+          <ReferralBanner />
           <DashboardContent />
         </main>
       </div>

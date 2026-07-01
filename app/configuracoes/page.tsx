@@ -107,11 +107,22 @@ export default function ConfiguracoesPage() {
         body: JSON.stringify(formData),
       })
 
-      if (!response.ok) throw new Error("Erro ao salvar dados")
+      if (!response.ok) {
+        const err = await response.json()
+        alert(err.error || "Erro ao salvar dados.")
+        return
+      }
 
       const data = await response.json()
       setUsuario(data.usuario)
-      alert("Dados atualizados com sucesso!")
+
+      if (data.bonus?.bonus) {
+        alert(`✅ Perfil salvo!\n\n🎁 Bônus de indicação liberado! Você recebeu ${data.bonus.creditos_ganhos} créditos.`)
+        // Limpa o flag do banner para não mostrar mais
+        localStorage.setItem("referral-banner-dismissed", "true")
+      } else {
+        alert("Dados atualizados com sucesso!")
+      }
     } catch (error) {
       console.error("Erro ao salvar dados:", error)
       alert("Erro ao salvar dados. Tente novamente.")
