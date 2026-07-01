@@ -1,14 +1,14 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { createClient } from "@/lib/supabase/client"
-import { Loader2, Mail, Lock, Eye, EyeOff, User } from "lucide-react"
+import { Loader2, Mail, Lock, Eye, EyeOff, User, Gift } from "lucide-react"
 
 export default function SignupPage() {
   const [nome, setNome] = useState("")
@@ -20,8 +20,15 @@ export default function SignupPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [refCode, setRefCode] = useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  useEffect(() => {
+    const ref = searchParams.get("ref")
+    if (ref) setRefCode(ref.toUpperCase())
+  }, [searchParams])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,6 +66,16 @@ export default function SignupPage() {
       }
 
       if (data.user) {
+        // Aplicar código de indicação se veio com ?ref=
+        if (refCode) {
+          try {
+            await fetch("/api/referrals/apply", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ codigo_referencia: refCode }),
+            })
+          } catch {}
+        }
         setSuccess(true)
         setTimeout(() => {
           router.push("/")
@@ -190,6 +207,29 @@ export default function SignupPage() {
                   {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
+            </div>
+
+            {/* Código de indicação */}
+            <div className="space-y-2">
+              <Label htmlFor="refCode" className="flex items-center gap-2">
+                <Gift className="h-4 w-4 text-green-600" />
+                Código de indicação
+                <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <Input
+                id="refCode"
+                type="text"
+                placeholder="Ex: AB12CD34"
+                value={refCode}
+                onChange={(e) => setRefCode(e.target.value.toUpperCase())}
+                className="h-12 font-mono tracking-widest"
+                disabled={loading}
+              />
+              {refCode && (
+                <p className="text-xs text-green-600 font-medium">
+                  Você ganhará 300 créditos bônus ao criar sua conta!
+                </p>
+              )}
             </div>
 
             <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={loading}>

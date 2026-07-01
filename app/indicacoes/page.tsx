@@ -106,7 +106,7 @@ export default function IndicacoesPage() {
   }
 
   const copiarLink = () => {
-    const link = `${window.location.origin}/cadastro?ref=${data?.codigo_referencia}`
+    const link = `${window.location.origin}/signup?ref=${data?.codigo_referencia}`
     navigator.clipboard.writeText(link)
     toast.success("Link copiado para a área de transferência!")
   }
@@ -148,14 +148,14 @@ export default function IndicacoesPage() {
   }
 
   const compartilharWhatsApp = () => {
-    const link = `${window.location.origin}/cadastro?ref=${data?.codigo_referencia}`
+    const link = `${window.location.origin}/signup?ref=${data?.codigo_referencia}`
     const texto = `Olá! Você foi convidado para usar o Lidzy - a melhor plataforma de automação de prospecção! 🚀\n\nCadastre-se usando meu link e ganhe 300 créditos de bônus:\n${link}`
     const url = `https://wa.me/?text=${encodeURIComponent(texto)}`
     window.open(url, "_blank")
   }
 
   const compartilharEmail = () => {
-    const link = `${window.location.origin}/cadastro?ref=${data?.codigo_referencia}`
+    const link = `${window.location.origin}/signup?ref=${data?.codigo_referencia}`
     const assunto = "Convite para Lidzy - Ganhe 300 créditos!"
     const corpo = `Olá!\n\nVocê foi convidado para usar o Lidzy - a melhor plataforma de automação de prospecção!\n\nCadastre-se usando meu link de indicação e ganhe 300 créditos de bônus:\n${link}\n\nAté logo!`
     window.location.href = `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`
@@ -282,7 +282,7 @@ export default function IndicacoesPage() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
-                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/cadastro?ref=${data?.codigo_referencia || ""}`}
+                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/signup?ref=${data?.codigo_referencia || ""}`}
                   readOnly
                   className="font-mono text-sm"
                 />
