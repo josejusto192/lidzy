@@ -16,7 +16,14 @@ export async function GET() {
     }
 
     // Get user's referral code
-    const { data: usuario } = await supabase.from("usuarios").select("codigo_referencia").eq("id", user.id).single()
+    let { data: usuario } = await supabase.from("usuarios").select("codigo_referencia").eq("id", user.id).single()
+
+    // Gera código se não existir (fallback para usuários antigos)
+    if (!usuario?.codigo_referencia) {
+      const codigo = Math.random().toString(36).substring(2, 10).toUpperCase()
+      await supabase.from("usuarios").update({ codigo_referencia: codigo }).eq("id", user.id)
+      usuario = { codigo_referencia: codigo }
+    }
 
     // Get user's referrals
     const { data: referrals, error: referralsError } = await supabase
