@@ -34,11 +34,10 @@ function toLookalikeCSV(rows: Record<string, unknown>[]): string {
     // Telefone já deve estar no formato 55DDDNUMERO
     const phone = String(c.telefone ?? "").replace(/\D/g, "") || ""
 
-    // Município e UF podem vir de regiao ("São Paulo - SP") ou fonte_detalhes
     const fonteDetalhes = (c.fonte_detalhes as Record<string, unknown>) ?? {}
-    const municipio = String(fonteDetalhes.municipio ?? "").trim()
-    const uf = String(fonteDetalhes.uf ?? "").toLowerCase()
-    const cep = String(fonteDetalhes.cep ?? "").replace(/\D/g, "")
+    const municipio = String(c.municipio ?? fonteDetalhes.municipio ?? "").trim()
+    const uf = String(c.uf ?? fonteDetalhes.uf ?? "").toLowerCase()
+    const cep = String(c.cep ?? fonteDetalhes.cep ?? "").replace(/\D/g, "")
 
     return {
       email: c.email ?? "",
@@ -77,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     let query = supabase
       .from("contatos")
-      .select("nome_empresa, cnpj, telefone, email, endereco, regiao, nicho, situacao_cadastral, porte_empresa, natureza_juridica, cnae_principal, data_abertura, capital_social, status, origem, fonte_detalhes")
+      .select("nome_empresa, razao_social, cnpj, cnpj_raiz, telefone, email, endereco, regiao, nicho, situacao_cadastral, situacao_motivo, porte_empresa, natureza_juridica, cnae_principal, cnae_principal_descricao, cnaes_secundarios, data_abertura, capital_social, status, origem, cep, logradouro, numero_endereco, complemento, bairro, municipio, uf, eh_mei, optante_simples, matriz_filial, email_valido, email_dominio, telefone_tipo, fonte_detalhes")
       .eq("user_id", user.id)
       .limit(Math.min(Number(limite), 10000))
 
@@ -107,16 +106,32 @@ export async function POST(request: NextRequest) {
     } else {
       const headers = [
         { key: "nome_empresa", label: "Empresa" },
+        { key: "razao_social", label: "Razão Social" },
         { key: "cnpj", label: "CNPJ" },
+        { key: "cnpj_raiz", label: "CNPJ Raiz" },
         { key: "telefone", label: "Telefone" },
+        { key: "telefone_tipo", label: "Tipo Telefone" },
         { key: "email", label: "E-mail" },
+        { key: "email_valido", label: "E-mail Válido" },
+        { key: "email_dominio", label: "Domínio E-mail" },
         { key: "nicho", label: "Nicho/CNAE" },
+        { key: "cnae_principal", label: "CNAE Código" },
+        { key: "cnae_principal_descricao", label: "CNAE Descrição" },
         { key: "regiao", label: "Região" },
-        { key: "endereco", label: "Endereço" },
+        { key: "municipio", label: "Município" },
+        { key: "uf", label: "UF" },
+        { key: "cep", label: "CEP" },
+        { key: "logradouro", label: "Logradouro" },
+        { key: "numero_endereco", label: "Número" },
+        { key: "complemento", label: "Complemento" },
+        { key: "bairro", label: "Bairro" },
         { key: "situacao_cadastral", label: "Situação Cadastral" },
+        { key: "situacao_motivo", label: "Motivo Situação" },
         { key: "porte_empresa", label: "Porte" },
         { key: "natureza_juridica", label: "Natureza Jurídica" },
-        { key: "cnae_principal", label: "CNAE Principal" },
+        { key: "matriz_filial", label: "Matriz/Filial" },
+        { key: "eh_mei", label: "MEI" },
+        { key: "optante_simples", label: "Simples Nacional" },
         { key: "data_abertura", label: "Data Abertura" },
         { key: "capital_social", label: "Capital Social" },
         { key: "status", label: "Status" },

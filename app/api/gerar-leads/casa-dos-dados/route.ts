@@ -175,8 +175,6 @@ function buildPayload(filtros: Filtros, pagina: number) {
 }
 
 // ── Mapeamento dos campos conforme documentação oficial ───────────────────────
-// Só insere colunas que existem na tabela base. Todos os dados ricos ficam
-// também em fonte_detalhes (json) para não depender da migration ter sido rodada.
 
 function mapItem(item: CddItem, userId: string) {
   const tel = item.contato_telefonico?.[0]
@@ -187,6 +185,7 @@ function mapItem(item: CddItem, userId: string) {
   const endereco = item.endereco
   const municipio = endereco?.municipio ?? null
   const uf = endereco?.uf ?? null
+  const ibge = endereco?.ibge
 
   let telefoneNorm: string | null = null
   if (tel?.completo) {
@@ -194,53 +193,79 @@ function mapItem(item: CddItem, userId: string) {
     telefoneNorm = raw.length >= 10 && raw.length <= 11 ? `55${raw}` : raw.length >= 12 ? raw : null
   }
 
+  const emailDominio = emailObj?.dominio ?? emailObj?.email?.split("@")[1] ?? null
+  const dataNow = new Date().toISOString()
+
   return {
-    // Colunas que existem na tabela atual (sem depender da migration)
+    // ── Identificação ─────────────────────────────────────────────────────────
     nome_empresa: item.nome_fantasia || item.razao_social,
     cnpj: item.cnpj.replace(/\D/g, ""),
-    telefone: telefoneNorm,
-    email: emailObj?.email ?? null,
+    cnpj_raiz: item.cnpj_raiz ?? null,
+    razao_social: item.razao_social ?? null,
+    nome_fantasia: item.nome_fantasia ?? null,
+    matriz_filial: item.matriz_filial ?? null,
+    // ── Situação cadastral ────────────────────────────────────────────────────
+    situacao_cadastral: situacao?.situacao_atual ?? null,
+    situacao_motivo: situacao?.motivo ?? null,
+    situacao_data: situacao?.data?.slice(0, 10) ?? null,
+    // ── Porte e natureza ─────────────────────────────────────────────────────
+    porte_empresa: item.porte_empresa?.descricao ?? null,
+    porte_codigo: item.porte_empresa?.codigo ?? null,
+    porte_descricao: item.porte_empresa?.descricao ?? null,
+    natureza_juridica: item.descricao_natureza_juridica ?? null,
+    natureza_juridica_codigo: item.codigo_natureza_juridica ?? null,
+    natureza_juridica_descricao: item.descricao_natureza_juridica ?? null,
+    qualificacao_responsavel_codigo: item.qualificacao_responsavel?.codigo ?? null,
+    qualificacao_responsavel_descricao: item.qualificacao_responsavel?.descricao ?? null,
+    // ── MEI / Simples ─────────────────────────────────────────────────────────
+    eh_mei: item.mei?.optante ?? false,
+    mei_data_opcao: item.mei?.data_opcao_mei?.slice(0, 10) ?? null,
+    mei_data_exclusao: item.mei?.data_exclusao_mei?.slice(0, 10) ?? null,
+    optante_simples: item.simples?.optante ?? false,
+    simples_data_opcao: item.simples?.data_opcao_simples?.slice(0, 10) ?? null,
+    simples_data_exclusao: item.simples?.data_exclusao_simples?.slice(0, 10) ?? null,
+    // ── CNAE ──────────────────────────────────────────────────────────────────
+    nicho: cnae?.descricao ?? null,
+    cnae_principal: cnae?.codigo ?? null,
+    cnae_principal_codigo: cnae?.codigo ?? null,
+    cnae_principal_descricao: cnae?.descricao ?? null,
+    cnaes_secundarios: cnaesSecundarios.length ? cnaesSecundarios : null,
+    // ── Endereço ──────────────────────────────────────────────────────────────
     endereco: [endereco?.logradouro, endereco?.numero, endereco?.complemento, endereco?.bairro, municipio, uf]
       .filter(Boolean).join(", ") || null,
     regiao: municipio ? `${municipio}${uf ? ` - ${uf}` : ""}` : uf ?? null,
-    nicho: cnae?.descricao ?? null,
-    situacao_cadastral: situacao?.situacao_atual ?? null,
-    porte_empresa: item.porte_empresa?.descricao ?? null,
-    natureza_juridica: item.descricao_natureza_juridica ?? null,
-    cnae_principal: cnae?.codigo ?? null,
+    cep: endereco?.cep?.replace(/\D/g, "") ?? null,
+    tipo_logradouro: endereco?.tipo_logradouro ?? null,
+    logradouro: endereco?.logradouro ?? null,
+    numero_endereco: endereco?.numero ?? null,
+    complemento: endereco?.complemento ?? null,
+    bairro: endereco?.bairro ?? null,
+    municipio: municipio,
+    uf: uf,
+    ibge_municipio: ibge?.codigo_municipio ?? null,
+    ibge_uf: ibge?.codigo_uf ?? null,
+    latitude: ibge?.latitude ?? null,
+    longitude: ibge?.longitude ?? null,
+    // ── Contato ───────────────────────────────────────────────────────────────
+    telefone: telefoneNorm,
+    telefone_ddd: tel?.ddd ?? null,
+    telefone_numero: tel?.numero ?? null,
+    telefone_tipo: tel?.tipo ?? null,
+    email: emailObj?.email ?? null,
+    email_valido: emailObj?.valido ?? null,
+    email_dominio: emailDominio,
+    // ── Dados financeiros / abertura ──────────────────────────────────────────
     data_abertura: item.data_abertura?.slice(0, 10) ?? null,
     capital_social: item.capital_social ?? null,
+    // ── Quadro societário ─────────────────────────────────────────────────────
+    quadro_societario: item.quadro_societario?.length ? item.quadro_societario : null,
+    // ── Meta ──────────────────────────────────────────────────────────────────
+    data_consulta: dataNow,
+    payload_raw: item,
+    fonte_detalhes: { municipio, uf, cep: endereco?.cep },
     status: "novo_lead",
     origem: "casa_dos_dados",
     user_id: userId,
-    // Todos os dados ricos ficam em fonte_detalhes até a migration ser rodada
-    fonte_detalhes: {
-      razao_social: item.razao_social,
-      cnpj_raiz: item.cnpj_raiz,
-      matriz_filial: item.matriz_filial,
-      situacao_motivo: situacao?.motivo,
-      situacao_data: situacao?.data,
-      porte_codigo: item.porte_empresa?.codigo,
-      natureza_juridica_codigo: item.codigo_natureza_juridica,
-      qualificacao_responsavel: item.qualificacao_responsavel,
-      eh_mei: item.mei?.optante ?? false,
-      mei_data_opcao: item.mei?.data_opcao_mei,
-      optante_simples: item.simples?.optante ?? false,
-      simples_data_opcao: item.simples?.data_opcao_simples,
-      cnaes_secundarios: cnaesSecundarios,
-      cep: endereco?.cep,
-      bairro: endereco?.bairro,
-      municipio,
-      uf,
-      ibge: endereco?.ibge,
-      telefone_ddd: tel?.ddd,
-      telefone_tipo: tel?.tipo,
-      email_valido: emailObj?.valido,
-      email_dominio: emailObj?.dominio ?? emailObj?.email?.split("@")[1],
-      quadro_societario: item.quadro_societario,
-      data_consulta: new Date().toISOString(),
-      payload_raw: item,
-    },
   }
 }
 
