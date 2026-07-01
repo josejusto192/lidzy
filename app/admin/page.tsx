@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Users,
   Database,
@@ -17,6 +19,10 @@ import {
   DollarSign,
   Activity,
   Calendar,
+  TrendingDown,
+  Coins,
+  Receipt,
+  Wallet,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -54,6 +60,17 @@ interface Usuario {
   assinaturas: any[]
 }
 
+const CUSTO_POR_CREDITO_BRL = 0.006 // R$0,006 por crédito (média Serper + CDD)
+
+interface FinanceiroData {
+  mrr: number
+  creditosUsadosMes: number
+  creditosLeadsMes: number
+  creditosMensagensMes: number
+  custoApiMes: number
+  topUsuarios: { id: string; nome: string; email: string; creditosMes: number; custoMes: number }[]
+}
+
 interface AggregatedMetrics {
   usuariosPorMes: { mes: string; total: number }[]
   projetosPorStatus: { status: string; total: number; cor: string }[]
@@ -67,6 +84,8 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [metrics, setMetrics] = useState<AggregatedMetrics | null>(null)
+  const [financeiro, setFinanceiro] = useState<FinanceiroData | null>(null)
+  const [custosFixos, setCustosFixos] = useState(600)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
@@ -97,7 +116,11 @@ export default function AdminPage() {
 
   async function loadAdminData() {
     try {
-      const [statsRes, usersRes] = await Promise.all([fetch("/api/admin/stats"), fetch("/api/admin/users")])
+      const [statsRes, usersRes, finRes] = await Promise.all([
+        fetch("/api/admin/stats"),
+        fetch("/api/admin/users"),
+        fetch("/api/admin/financeiro"),
+      ])
 
       if (statsRes.ok) {
         const statsData = await statsRes.json()
@@ -108,6 +131,10 @@ export default function AdminPage() {
       if (usersRes.ok) {
         const usersData = await usersRes.json()
         setUsuarios(usersData.usuarios)
+      }
+
+      if (finRes.ok) {
+        setFinanceiro(await finRes.json())
       }
     } catch (error) {
       console.error("[v0] Erro ao carregar dados admin:", error)
@@ -227,6 +254,7 @@ export default function AdminPage() {
               <TabsList>
                 <TabsTrigger value="usuarios">Usuários</TabsTrigger>
                 <TabsTrigger value="metricas">Métricas Agregadas</TabsTrigger>
+                <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
               </TabsList>
 
               <TabsContent value="usuarios" className="space-y-4">
@@ -386,6 +414,165 @@ export default function AdminPage() {
                     </Card>
                   </>
                 )}
+              </TabsContent>
+              <TabsContent value="financeiro" className="space-y-6">
+                {/* Custo fixo editável */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <Receipt className="h-4 w-4 text-muted-foreground" />
+                      Custos Fixos Mensais
+                    </CardTitle>
+                    <CardDescription>VPS, IA, domínio e outros — edite conforme necessidade</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-3 max-w-xs">
+                      <Label className="text-sm whitespace-nowrap">R$</Label>
+                      <Input
+                        type="number"
+                        value={custosFixos}
+                        onChange={e => setCustosFixos(Number(e.target.value))}
+                        className="w-32"
+                      />
+                      <span className="text-xs text-muted-foreground">/mês</span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Custo por crédito (API): R$ {CUSTO_POR_CREDITO_BRL.toFixed(4)} (média Serper + CDD)
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {financeiro && (() => {
+                  const custoTotal = financeiro.custoApiMes + custosFixos
+                  const lucro = financeiro.mrr - custoTotal
+                  const margemPct = financeiro.mrr > 0 ? (lucro / financeiro.mrr) * 100 : 0
+
+                  return (
+                    <>
+                      {/* KPIs */}
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">MRR</CardTitle>
+                            <Wallet className="h-4 w-4 text-green-500" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold text-green-600">
+                              R$ {financeiro.mrr.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Receita recorrente mensal</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Custo Total</CardTitle>
+                            <TrendingDown className="h-4 w-4 text-red-400" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold text-red-500">
+                              R$ {custoTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              API R$ {financeiro.custoApiMes.toFixed(2)} + fixo R$ {custosFixos.toFixed(2)}
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Lucro Estimado</CardTitle>
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className={`text-2xl font-bold ${lucro >= 0 ? "text-green-600" : "text-red-500"}`}>
+                              R$ {lucro.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </div>
+                            <p className="text-xs text-muted-foreground">MRR − custos do mês</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Margem</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className={`text-2xl font-bold ${margemPct >= 50 ? "text-green-600" : margemPct >= 0 ? "text-yellow-500" : "text-red-500"}`}>
+                              {margemPct.toFixed(1)}%
+                            </div>
+                            <p className="text-xs text-muted-foreground">Margem líquida estimada</p>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* Uso de créditos no mês */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <Coins className="h-4 w-4 text-yellow-500" />
+                            Uso de Créditos — Mês Atual
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-3 gap-4 text-center">
+                            <div className="rounded-lg bg-secondary p-4">
+                              <p className="text-2xl font-bold">{financeiro.creditosUsadosMes.toLocaleString("pt-BR")}</p>
+                              <p className="text-xs text-muted-foreground mt-1">Total consumido</p>
+                            </div>
+                            <div className="rounded-lg bg-secondary p-4">
+                              <p className="text-2xl font-bold">{financeiro.creditosLeadsMes.toLocaleString("pt-BR")}</p>
+                              <p className="text-xs text-muted-foreground mt-1">Leads gerados</p>
+                            </div>
+                            <div className="rounded-lg bg-secondary p-4">
+                              <p className="text-2xl font-bold">{financeiro.creditosMensagensMes.toLocaleString("pt-BR")}</p>
+                              <p className="text-xs text-muted-foreground mt-1">Mensagens enviadas</p>
+                            </div>
+                          </div>
+                          <p className="mt-3 text-center text-xs text-muted-foreground">
+                            Custo de API estimado: <span className="font-medium text-foreground">R$ {financeiro.custoApiMes.toFixed(2)}</span>
+                            {" "}({financeiro.creditosUsadosMes.toLocaleString("pt-BR")} × R$ {CUSTO_POR_CREDITO_BRL})
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      {/* Top usuários por consumo */}
+                      {financeiro.topUsuarios.length > 0 && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base">Top Usuários por Consumo (mês)</CardTitle>
+                            <CardDescription>Usuários que mais usaram créditos este mês</CardDescription>
+                          </CardHeader>
+                          <CardContent className="p-0">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Usuário</th>
+                                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Créditos</th>
+                                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Custo API</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {financeiro.topUsuarios.map(u => (
+                                  <tr key={u.id} className="border-b last:border-0">
+                                    <td className="px-4 py-3">
+                                      <p className="font-medium">{u.nome || "—"}</p>
+                                      <p className="text-xs text-muted-foreground">{u.email}</p>
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-mono">{u.creditosMes.toLocaleString("pt-BR")}</td>
+                                    <td className="px-4 py-3 text-right font-mono text-red-500">
+                                      R$ {u.custoMes.toFixed(3)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </>
+                  )
+                })()}
               </TabsContent>
             </Tabs>
           </div>
