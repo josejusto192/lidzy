@@ -1235,6 +1235,8 @@ export function DashboardContent() {
         title={alertDialog.title}
         message={alertDialog.message}
         details={alertDialog.details}
+        actionLabel={alertDialog.title === "Créditos Insuficientes" ? "Solicitar créditos" : undefined}
+        onAction={alertDialog.title === "Créditos Insuficientes" ? () => window.open("https://wa.me/5515991485349", "_blank") : undefined}
       />
     </div>
   )

@@ -18,9 +18,11 @@ interface AlertDialogCustomProps {
   message: string
   type?: "success" | "error" | "warning" | "info"
   details?: string
+  actionLabel?: string
+  onAction?: () => void
 }
 
-export function AlertDialogCustom({ open, onClose, title, message, type = "info", details }: AlertDialogCustomProps) {
+export function AlertDialogCustom({ open, onClose, title, message, type = "info", details, actionLabel, onAction }: AlertDialogCustomProps) {
   const icons = {
     success: <CheckCircle className="h-6 w-6 text-green-500" />,
     error: <XCircle className="h-6 w-6 text-red-500" />,
@@ -50,10 +52,15 @@ export function AlertDialogCustom({ open, onClose, title, message, type = "info"
             </div>
           )}
         </DialogHeader>
-        <DialogFooter>
-          <Button onClick={onClose} className="w-full sm:w-auto">
-            OK
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
+            Fechar
           </Button>
+          {actionLabel && onAction && (
+            <Button onClick={() => { onClose(); onAction() }} className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
+              {actionLabel}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
