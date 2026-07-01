@@ -29,6 +29,7 @@ import { AlertDialogCustom } from "@/components/alert-dialog-custom"
 import { STATUS_LABELS, STATUS_COLORS, type StatusContato } from "@/lib/status-config"
 import { GeradorCasaDados } from "@/components/gerador-casa-dos-dados"
 import { ExportMenu } from "@/components/export-menu"
+import { NovoContatoManual } from "@/components/novo-contato-manual"
 
 interface Lead {
   id: string
@@ -570,14 +571,17 @@ export function DashboardContent() {
 
       <div className="grid gap-4 md:gap-6">
         <Card className="bg-card p-4 md:p-6">
-          <div className="mb-4 md:mb-6 flex items-center gap-3">
-            <div className="rounded-lg bg-primary/10 p-2">
-              <Sparkles className="h-5 w-5 text-primary" />
+          <div className="mb-4 md:mb-6 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary/10 p-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-card-foreground">Gerador de Contatos</h2>
+                <p className="text-xs text-muted-foreground">Busque novos contatos automaticamente</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-card-foreground">Gerador de Contatos</h2>
-              <p className="text-xs text-muted-foreground">Busque novos contatos automaticamente</p>
-            </div>
+            <NovoContatoManual onCreated={loadLeads} />
           </div>
 
           <Tabs defaultValue="google">

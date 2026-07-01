@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Separator } from "@/components/ui/separator"
 import {
   Users,
   Database,
@@ -23,6 +25,12 @@ import {
   Coins,
   Receipt,
   Wallet,
+  ShieldBan,
+  Trash2,
+  CreditCard,
+  Eye,
+  ChevronRight,
+  ShieldCheck,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -87,6 +95,12 @@ export default function AdminPage() {
   const [financeiro, setFinanceiro] = useState<FinanceiroData | null>(null)
   const [custosFixos, setCustosFixos] = useState(600)
   const [loading, setLoading] = useState(true)
+  const [selectedUser, setSelectedUser] = useState<Usuario | null>(null)
+  const [userAtividade, setUserAtividade] = useState<any>(null)
+  const [userDialogOpen, setUserDialogOpen] = useState(false)
+  const [creditosInput, setCreditosInput] = useState("")
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionMsg, setActionMsg] = useState("")
   const router = useRouter()
   const supabase = createClient()
 
@@ -141,6 +155,60 @@ export default function AdminPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function openUserDialog(u: Usuario) {
+    setSelectedUser(u)
+    setUserAtividade(null)
+    setCreditosInput(String(u.creditos))
+    setActionMsg("")
+    setUserDialogOpen(true)
+    const res = await fetch(`/api/admin/usuarios/${u.id}/atividade`)
+    if (res.ok) setUserAtividade(await res.json())
+  }
+
+  async function handleCreditUpdate() {
+    if (!selectedUser) return
+    setActionLoading(true)
+    setActionMsg("")
+    const res = await fetch(`/api/admin/usuarios/${selectedUser.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ creditos: Number(creditosInput), descricao: "Ajuste manual de créditos pelo admin" }),
+    })
+    if (res.ok) {
+      setActionMsg("Créditos atualizados!")
+      setUsuarios(prev => prev.map(u => u.id === selectedUser.id ? { ...u, creditos: Number(creditosInput) } : u))
+      setSelectedUser(prev => prev ? { ...prev, creditos: Number(creditosInput) } : prev)
+    } else {
+      const d = await res.json()
+      setActionMsg(d.error || "Erro")
+    }
+    setActionLoading(false)
+  }
+
+  async function handleBan() {
+    if (!selectedUser || !confirm(`Banir ${selectedUser.nome || selectedUser.email}?`)) return
+    setActionLoading(true)
+    const res = await fetch(`/api/admin/usuarios/${selectedUser.id}`, {
+      method: "DELETE",
+    })
+    if (res.ok) {
+      setActionMsg("Usuário banido.")
+      setUsuarios(prev => prev.map(u => u.id === selectedUser.id ? { ...u, role: "banned" } : u))
+    }
+    setActionLoading(false)
+  }
+
+  async function handleDelete() {
+    if (!selectedUser || !confirm(`DELETAR permanentemente ${selectedUser.nome || selectedUser.email}? Esta ação não pode ser desfeita.`)) return
+    setActionLoading(true)
+    const res = await fetch(`/api/admin/usuarios/${selectedUser.id}?hard=true`, { method: "DELETE" })
+    if (res.ok) {
+      setUserDialogOpen(false)
+      setUsuarios(prev => prev.filter(u => u.id !== selectedUser.id))
+    }
+    setActionLoading(false)
   }
 
   if (loading) {
@@ -261,52 +329,165 @@ export default function AdminPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Todos os Usuários</CardTitle>
-                    <CardDescription>Informações básicas de usuários (nome, email, plano, créditos)</CardDescription>
+                    <CardDescription>Clique em um usuário para gerenciar créditos, banir ou ver atividade</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {usuarios.map((usuario) => (
-                        <div key={usuario.id} className="flex items-center justify-between border-b pb-4 last:border-0">
-                          <div className="flex items-center gap-4">
-                            <Avatar>
-                              <AvatarImage src={usuario.foto_perfil || "/placeholder.svg"} />
-                              <AvatarFallback>
-                                {usuario.nome
-                                  ?.split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                                  .toUpperCase()
-                                  .slice(0, 2) || "U"}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{usuario.nome || "Sem nome"}</p>
-                              <p className="text-sm text-muted-foreground">{usuario.email}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <p className="text-sm font-medium">{usuario.creditos} créditos</p>
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(usuario.criado_em).toLocaleDateString("pt-BR")}
-                              </p>
-                            </div>
-                            <Badge variant={usuario.role === "super_admin" ? "default" : "secondary"}>
-                              {usuario.role === "super_admin"
-                                ? "Super Admin"
-                                : usuario.role === "admin"
-                                  ? "Admin"
-                                  : "Usuário"}
-                            </Badge>
-                            {usuario.assinaturas?.[0] && (
-                              <Badge variant="outline">{usuario.assinaturas[0].planos?.nome}</Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  <CardContent className="p-0">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Usuário</th>
+                          <th className="px-4 py-3 text-right font-medium text-muted-foreground">Créditos</th>
+                          <th className="px-4 py-3 text-center font-medium text-muted-foreground">Plano</th>
+                          <th className="px-4 py-3 text-center font-medium text-muted-foreground">Role</th>
+                          <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cadastro</th>
+                          <th className="px-4 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {usuarios.map((usuario) => (
+                          <tr key={usuario.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => openUserDialog(usuario)}>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={usuario.foto_perfil || "/placeholder.svg"} />
+                                  <AvatarFallback className="text-xs">
+                                    {usuario.nome?.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) || "U"}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-medium">{usuario.nome || "Sem nome"}</p>
+                                  <p className="text-xs text-muted-foreground">{usuario.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono">{(usuario.creditos ?? 0).toLocaleString("pt-BR")}</td>
+                            <td className="px-4 py-3 text-center">
+                              {usuario.assinaturas?.[0] ? (
+                                <Badge variant="outline">{usuario.assinaturas[0].planos?.nome}</Badge>
+                              ) : <span className="text-muted-foreground text-xs">—</span>}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <Badge variant={(usuario as any).role === "super_admin" ? "default" : (usuario as any).role === "banned" ? "destructive" : "secondary"}>
+                                {(usuario as any).role === "super_admin" ? "Admin" : (usuario as any).role === "banned" ? "Banido" : "Usuário"}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 text-right text-xs text-muted-foreground">
+                              {new Date(usuario.criado_em).toLocaleDateString("pt-BR")}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </CardContent>
                 </Card>
+
+                {/* Dialog de gestão do usuário */}
+                <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
+                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Avatar className="h-7 w-7">
+                          <AvatarFallback className="text-xs">
+                            {selectedUser?.nome?.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) || "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                        {selectedUser?.nome || "Usuário"}
+                      </DialogTitle>
+                    </DialogHeader>
+
+                    {selectedUser && (
+                      <div className="space-y-5">
+                        {/* Info básica */}
+                        <div className="text-sm space-y-1 text-muted-foreground">
+                          <p>{selectedUser.email}</p>
+                          <p>Cadastro: {new Date(selectedUser.criado_em).toLocaleDateString("pt-BR")}</p>
+                        </div>
+
+                        {/* Stats de atividade */}
+                        {userAtividade ? (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="rounded-lg bg-secondary p-3 text-center">
+                              <p className="text-xl font-bold">{userAtividade.stats.totalContatos}</p>
+                              <p className="text-xs text-muted-foreground">Contatos</p>
+                            </div>
+                            <div className="rounded-lg bg-secondary p-3 text-center">
+                              <p className="text-xl font-bold">{userAtividade.stats.totalProjetos}</p>
+                              <p className="text-xs text-muted-foreground">Projetos</p>
+                            </div>
+                            <div className="rounded-lg bg-secondary p-3 text-center">
+                              <p className="text-xl font-bold">{(userAtividade.usuario?.creditos_leads_usados ?? 0).toLocaleString()}</p>
+                              <p className="text-xs text-muted-foreground">Leads gerados</p>
+                            </div>
+                            <div className="rounded-lg bg-secondary p-3 text-center">
+                              <p className="text-xl font-bold">{(userAtividade.usuario?.creditos_mensagens_usados ?? 0).toLocaleString()}</p>
+                              <p className="text-xs text-muted-foreground">Msgs enviadas</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="h-20 flex items-center justify-center text-muted-foreground text-sm">Carregando atividade...</div>
+                        )}
+
+                        <Separator />
+
+                        {/* Liberar créditos */}
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-2 font-semibold">
+                            <CreditCard className="h-4 w-4" />
+                            Créditos
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              type="number"
+                              value={creditosInput}
+                              onChange={e => setCreditosInput(e.target.value)}
+                              className="w-36"
+                            />
+                            <Button size="sm" onClick={handleCreditUpdate} disabled={actionLoading}>
+                              Salvar
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">Saldo atual: {selectedUser.creditos?.toLocaleString("pt-BR")} créditos</p>
+                        </div>
+
+                        {/* Histórico resumido */}
+                        {userAtividade?.historico?.length > 0 && (
+                          <div className="space-y-2">
+                            <Label className="font-semibold">Últimas movimentações</Label>
+                            <div className="space-y-1 max-h-36 overflow-y-auto">
+                              {userAtividade.historico.map((h: any, i: number) => (
+                                <div key={i} className="flex justify-between text-xs py-1 border-b last:border-0">
+                                  <span className="text-muted-foreground">{h.descricao || h.tipo}</span>
+                                  <span className={h.quantidade >= 0 ? "text-green-500 font-mono" : "text-red-500 font-mono"}>
+                                    {h.quantidade >= 0 ? "+" : ""}{h.quantidade}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {actionMsg && <p className="text-sm text-green-500">{actionMsg}</p>}
+
+                        <Separator />
+
+                        {/* Ações destrutivas */}
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="gap-2 text-orange-500 border-orange-500/30 hover:bg-orange-500/10" onClick={handleBan} disabled={actionLoading}>
+                            <ShieldBan className="h-4 w-4" />
+                            Banir usuário
+                          </Button>
+                          <Button variant="outline" size="sm" className="gap-2 text-red-500 border-red-500/30 hover:bg-red-500/10" onClick={handleDelete} disabled={actionLoading}>
+                            <Trash2 className="h-4 w-4" />
+                            Deletar conta
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
               </TabsContent>
 
               <TabsContent value="metricas" className="space-y-4">
