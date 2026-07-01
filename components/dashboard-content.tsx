@@ -489,7 +489,7 @@ export function DashboardContent() {
   const enviados = leads.filter((l) => l.status === "mensagem enviada").length
   const erros = leads.filter((l) => l.status === "erro").length
 
-  const nichosUnicos = Array.from(new Set(leads.map((lead) => lead.nicho)))
+  const nichosUnicos = Array.from(new Set(leads.map((lead) => lead.nicho).filter(Boolean)))
   const regioesUnicas = Array.from(new Set(leads.map((lead) => lead.regiao).filter(Boolean)))
 
   const filteredLeadsCount = leads.filter((lead) => {
@@ -583,7 +583,7 @@ export function DashboardContent() {
                 Google Maps
               </TabsTrigger>
               <TabsTrigger value="casadados" className="flex-1 text-xs">
-                Casa dos Dados (CNPJ)
+                Receita Federal (CNPJ)
               </TabsTrigger>
             </TabsList>
 
@@ -1235,6 +1235,8 @@ export function DashboardContent() {
         title={alertDialog.title}
         message={alertDialog.message}
         details={alertDialog.details}
+        actionLabel={alertDialog.title === "Créditos Insuficientes" ? "Solicitar créditos" : undefined}
+        onAction={alertDialog.title === "Créditos Insuficientes" ? () => window.open("https://wa.me/5515991485349", "_blank") : undefined}
       />
     </div>
   )
